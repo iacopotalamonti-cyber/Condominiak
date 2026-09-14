@@ -25,6 +25,7 @@ function mediaTypeForImage(type: string): "image/jpeg" | "image/png" | "image/we
 // arrivano affidabilmente via process.env — vanno lette con Netlify.env.get.
 export default async (req: Request, context: Context) => {
   const { jobId, files } = (await req.json()) as { jobId: string; files: UploadedFile[] };
+  console.log(`extract-background invoked: jobId=${jobId}, files=${files.length}`);
   const store = getStore("extractions");
 
   try {
