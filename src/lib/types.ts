@@ -41,7 +41,22 @@ export interface Bilancio {
   preventivo: number | null;
   consuntivo: number | null;
   fondo_riserva: number | null;
+  // Totale stampato nel documento, per rifare la verifica di quadratura
+  // anche dopo il salvataggio.
+  totale_documento: number | null;
+  // Provenienza dei tre importi: da quale documento, a che pagina e con quale
+  // riga di testo il valore è stato letto.
+  fonti: Record<string, FonteSalvata> | null;
+  documento_path: string | null;
   note: string | null;
+}
+
+// Forma con cui una Fonte viene salvata su Postgres (jsonb).
+export interface FonteSalvata {
+  documento: string;
+  pagina: number;
+  testo: string;
+  verificata: boolean;
 }
 
 export type CategoriaSpesa =
@@ -63,6 +78,11 @@ export interface Spesa {
   anno: number;
   categoria: string;
   importo: number;
+  fonte_documento: string | null;
+  fonte_pagina: number | null;
+  fonte_testo: string | null;
+  fonte_verificata: boolean;
+  documento_path: string | null;
   note: string | null;
 }
 
@@ -157,13 +177,6 @@ export interface ExtractedUnita {
   tel: string;
 }
 
-export interface ExtractedBilancio {
-  anno: number;
-  prev: number;
-  cons: number;
-  fondo: number;
-}
-
 export interface ExtractedSpese {
   riscaldamento: number;
   ascensore: number;
@@ -175,6 +188,56 @@ export interface ExtractedSpese {
   acqua: number;
   giardinaggio: number;
   varie: number;
+}
+
+// Da dove arriva un importo. Senza questo un numero sbagliato è
+// indistinguibile da uno giusto: l'amministratore non ha modo di risalire al
+// punto del documento da cui il modello dice di averlo letto.
+export interface Fonte {
+  documento: string;
+  // 1-based e riferita al documento intero, non al blocco di pagine inviato
+  // al modello: le pagine vengono riportate all'originale in fase di lettura.
+  pagina: number;
+  // La riga copiata alla lettera dal documento, non una parafrasi.
+  testo: string;
+  // true solo se il testo compare in una citazione restituita dall'API, che
+  // estrae il passaggio dal PDF invece di lasciarlo generare al modello.
+  verificata: boolean;
+}
+
+// I campi importo di un bilancio, nella forma usata come chiave in `fonti` e
+// `conflitti`: "prev", "cons", "fondo", "totale", "spesa.riscaldamento", ...
+export type CampoImporto = "prev" | "cons" | "fondo" | "totale" | `spesa.${CategoriaSpesa}`;
+
+// Il valore che la fusione ha scartato quando due documenti danno importi
+// diversi per lo stesso campo: viene conservato e mostrato invece che perso.
+export interface ValoreScartato {
+  valore: number;
+  fonte: Fonte | null;
+}
+
+export type LivelloControllo = "errore" | "avviso";
+
+export interface Controllo {
+  // Campo a cui si riferisce, "" se riguarda l'intero bilancio.
+  campo: CampoImporto | "";
+  livello: LivelloControllo;
+  messaggio: string;
+}
+
+export interface ExtractedBilancio {
+  anno: number;
+  prev: number;
+  cons: number;
+  fondo: number;
+  // Le spese appartengono all'esercizio, non al condominio: tenerle qui
+  // impedisce che la voce di un anno finisca attribuita a un altro.
+  spese: ExtractedSpese;
+  // Il totale stampato nel documento, quando c'è: serve a verificare la somma
+  // delle voci senza doversi fidare del modello.
+  totale: number;
+  fonti: Partial<Record<CampoImporto, Fonte>>;
+  conflitti: Partial<Record<CampoImporto, ValoreScartato[]>>;
 }
 
 export interface ExtractedImpianti {
@@ -206,9 +269,11 @@ export interface ExtractionResult {
   info: ExtractedInfo;
   unita: ExtractedUnita[];
   bilanci: ExtractedBilancio[];
-  spese: ExtractedSpese;
   imp: ExtractedImpianti;
   impDet: ExtractedImpiantiDettagli;
+  // I documenti da cui viene l'estrazione, per riaprire il PDF alla pagina
+  // indicata dalla fonte.
+  documenti: UploadedFile[];
   trovati: number;
   totale: number;
   confidence: {

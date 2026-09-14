@@ -5,17 +5,32 @@ import type {
   ExtractedBilancio,
   ExtractedImpiantiDettagli,
   ExtractedInfo,
-  ExtractedSpese,
   ExtractedUnita,
+  Fonte,
+  UploadedFile,
 } from "@/lib/types";
+import { CATEGORIE_SPESA_LABEL } from "@/lib/condotwin-calculations";
 
 interface SaveCondominiumBody {
   info: ExtractedInfo;
   unita: ExtractedUnita[];
   bilanci: ExtractedBilancio[];
-  spese: ExtractedSpese;
   imp: Record<string, boolean>;
   impDet: ExtractedImpiantiDettagli;
+  documenti: UploadedFile[];
+}
+
+const MAX_TESTO_FONTE = 300;
+
+// La provenienza arriva dal client: si conserva solo ciò che ha la forma
+// attesa, con il testo troncato perché è una riga di tabella.
+function fonteValida(value: Fonte | undefined): Fonte | null {
+  if (!value || typeof value !== "object") return null;
+  const documento = typeof value.documento === "string" ? value.documento.slice(0, 200) : "";
+  const pagina = Number.isFinite(Number(value.pagina)) ? Math.max(0, Math.round(Number(value.pagina))) : 0;
+  const testo = typeof value.testo === "string" ? value.testo.slice(0, MAX_TESTO_FONTE) : "";
+  if (!documento && !pagina && !testo) return null;
+  return { documento, pagina, testo, verificata: value.verificata === true };
 }
 
 export async function POST(req: NextRequest) {
@@ -30,7 +45,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = (await req.json()) as SaveCondominiumBody;
-    const { info, unita, bilanci, spese, imp, impDet } = body;
+    const { info, unita, bilanci, imp, impDet, documenti } = body;
 
     const supabase = createServiceRoleClient();
 
@@ -77,38 +92,64 @@ export async function POST(req: NextRequest) {
       insertedUnita = data ?? [];
     }
 
-    // 3. bilanci (bulk, solo anni con dati)
-    if (bilanci?.length) {
-      const rows = bilanci
+    // 3. bilanci (bulk, solo anni con dati) con la provenienza dei totali
+    const percorsoDi = (nome: string) =>
+      documenti?.find((d) => d.name === nome)?.path ?? null;
+
+    const esercizi = (bilanci ?? []).filter((b) => b.anno > 0);
+
+    if (esercizi.length) {
+      const rows = esercizi
         .filter((b) => b.prev || b.cons || b.fondo)
-        .map((b) => ({
-          condominium_id: condominiumId,
-          anno: b.anno,
-          preventivo: b.prev || null,
-          consuntivo: b.cons || null,
-          fondo_riserva: b.fondo || null,
-        }));
+        .map((b) => {
+          const fonti: Record<string, Fonte> = {};
+          for (const campo of ["prev", "cons", "fondo", "totale"] as const) {
+            const fonte = fonteValida(b.fonti?.[campo]);
+            if (fonte) fonti[campo] = fonte;
+          }
+          const origine = fonti.cons ?? fonti.prev ?? fonti.totale;
+
+          return {
+            condominium_id: condominiumId,
+            anno: b.anno,
+            preventivo: b.prev || null,
+            consuntivo: b.cons || null,
+            fondo_riserva: b.fondo || null,
+            totale_documento: b.totale || null,
+            fonti: Object.keys(fonti).length ? fonti : null,
+            documento_path: origine ? percorsoDi(origine.documento) : null,
+          };
+        });
       if (rows.length) {
         const { error } = await supabase.from("bilanci").insert(rows);
         if (error) throw error;
       }
     }
 
-    // 4. spese (bulk, solo categorie con importo > 0)
-    const annoCorrente = bilanci?.[0]?.anno ?? new Date().getFullYear();
-    if (spese) {
-      const rows = Object.entries(spese)
-        .filter(([, importo]) => importo > 0)
-        .map(([categoria, importo]) => ({
-          condominium_id: condominiumId,
-          anno: annoCorrente,
-          categoria,
-          importo,
-        }));
-      if (rows.length) {
-        const { error } = await supabase.from("spese").insert(rows);
-        if (error) throw error;
-      }
+    // 4. spese: ogni voce resta attaccata all'anno del proprio esercizio,
+    //    invece di finire tutta sotto l'anno più recente come prima.
+    const righeSpese = esercizi.flatMap((b) =>
+      Object.entries(b.spese ?? {})
+        .filter(([categoria, importo]) => categoria in CATEGORIE_SPESA_LABEL && importo > 0)
+        .map(([categoria, importo]) => {
+          const fonte = fonteValida(b.fonti?.[`spesa.${categoria}` as keyof typeof b.fonti]);
+          return {
+            condominium_id: condominiumId,
+            anno: b.anno,
+            categoria,
+            importo,
+            fonte_documento: fonte?.documento || null,
+            fonte_pagina: fonte?.pagina || null,
+            fonte_testo: fonte?.testo || null,
+            fonte_verificata: fonte?.verificata ?? false,
+            documento_path: fonte ? percorsoDi(fonte.documento) : null,
+          };
+        })
+    );
+
+    if (righeSpese.length) {
+      const { error } = await supabase.from("spese").insert(righeSpese);
+      if (error) throw error;
     }
 
     // 5. impianti (bulk, solo impianti.presente = true)

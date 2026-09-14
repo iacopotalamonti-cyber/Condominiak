@@ -19,11 +19,11 @@ import type {
   ExtractedImpianti,
   ExtractedImpiantiDettagli,
   ExtractedInfo,
-  ExtractedSpese,
   ExtractedUnita,
   ExtractionResult,
   UploadedFile,
 } from "@/lib/types";
+import { bilancioVuoto } from "@/lib/anthropic";
 
 type WizardStep = "upload" | "analyzing" | "results" | "condominio" | "unita" | "bilanci" | "impianti" | "anteprima";
 
@@ -49,25 +49,9 @@ const EMPTY_INFO: ExtractedInfo = {
   telAmm: "",
 };
 
-const EMPTY_BILANCI: ExtractedBilancio[] = Array.from({ length: 5 }, (_, i) => ({
-  anno: new Date().getFullYear() - i,
-  prev: 0,
-  cons: 0,
-  fondo: 0,
-}));
-
-const EMPTY_SPESE: ExtractedSpese = {
-  riscaldamento: 0,
-  ascensore: 0,
-  pulizia: 0,
-  assicurazione: 0,
-  amm: 0,
-  illuminazione: 0,
-  manutenzione: 0,
-  acqua: 0,
-  giardinaggio: 0,
-  varie: 0,
-};
+// Un solo esercizio di partenza: un elenco di anni vuoti chiede di essere
+// riempito, ed è la stessa spinta che faceva inventare anni al modello.
+const EMPTY_BILANCI: ExtractedBilancio[] = [bilancioVuoto(new Date().getFullYear() - 1)];
 
 const EMPTY_IMP: ExtractedImpianti = {
   riscaldamento: false,
@@ -89,7 +73,7 @@ export default function OnboardingPage() {
   const [info, setInfo] = useState<ExtractedInfo>(EMPTY_INFO);
   const [unita, setUnita] = useState<ExtractedUnita[]>([]);
   const [bilanci, setBilanci] = useState<ExtractedBilancio[]>(EMPTY_BILANCI);
-  const [spese, setSpese] = useState<ExtractedSpese>(EMPTY_SPESE);
+  const [documenti, setDocumenti] = useState<UploadedFile[]>([]);
   const [imp, setImp] = useState<ExtractedImpianti>(EMPTY_IMP);
   const [impDet, setImpDet] = useState<ExtractedImpiantiDettagli>({});
 
@@ -109,7 +93,7 @@ export default function OnboardingPage() {
       setInfo({ ...EMPTY_INFO, ...result.info });
       setUnita(result.unita?.length ? result.unita : []);
       setBilanci(result.bilanci?.length ? result.bilanci : EMPTY_BILANCI);
-      setSpese({ ...EMPTY_SPESE, ...result.spese });
+      setDocumenti(result.documenti ?? []);
       setImp({ ...EMPTY_IMP, ...result.imp });
       setImpDet(result.impDet ?? {});
       setAiFilled(true);
@@ -132,7 +116,7 @@ export default function OnboardingPage() {
       const res = await fetch("/api/save-condominium", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ info, unita, bilanci, spese, imp, impDet }),
+        body: JSON.stringify({ info, unita, bilanci, imp, impDet, documenti }),
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error || "Salvataggio fallito");
@@ -209,9 +193,7 @@ export default function OnboardingPage() {
                 <BilanciStep
                   bilanci={bilanci}
                   onBilanciChange={setBilanci}
-                  spese={spese}
-                  onSpeseChange={setSpese}
-                  aiFilled={aiFilled}
+                  documenti={documenti}
                 />
               </StepNav>
             )}

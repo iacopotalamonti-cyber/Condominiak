@@ -6,22 +6,36 @@ import { PDFDocument } from "pdf-lib";
 
 import "../../src/lib/websocket-polyfill";
 import {
+  CAMPI_IMPORTO,
   EXTRACTION_MAX_TOKENS,
   EXTRACTION_MODEL,
   MAX_PAGES_PER_REQUEST,
+  PAGINE_SOVRAPPOSTE,
+  type Citazione,
+  type ContestoEstrazione,
   type ExtractionMode,
+  controlliBilancio,
   extractionPrompt,
   mergeExtractions,
   normalizeExtraction,
   parseExtractionOutput,
 } from "../../src/lib/anthropic";
-import type { ExtractionResult, UploadedFile } from "../../src/lib/types";
+import type { ExtractedBilancio, ExtractionResult, UploadedFile } from "../../src/lib/types";
 
 const BUCKET = "documenti-condominiali";
+
+// I documenti caricati per l'estrazione restano consultabili: senza il PDF
+// accanto al numero non c'è modo di verificare da dove arriva.
+const PREFISSO_TEMPORANEO = "pending/";
+const PREFISSO_ARCHIVIO = "documenti/";
 
 // Le Background Function hanno 15 minuti: ci fermiamo prima per avere il tempo
 // di salvare i risultati parziali invece di essere uccisi a metà lavoro.
 const DEADLINE_MS = 13 * 60_000;
+
+// Quante riletture mirate al massimo: ognuna è una richiesta in più, e serve
+// solo dove i conti non tornano.
+const MAX_RILETTURE = 3;
 
 interface Piece {
   kind: "pdf" | "image";
@@ -64,7 +78,9 @@ async function pdfSlice(
 }
 
 // Un PDF di molte pagine supera da solo il tetto di token per richiesta: viene
-// spezzato in blocchi prima ancora di provarci.
+// spezzato in blocchi prima ancora di provarci. I blocchi si sovrappongono,
+// perché un taglio netto cade regolarmente in mezzo a una tabella e ne fa
+// leggere solo metà — con il subtotale di quella metà preso per totale.
 async function piecesFor(file: UploadedFile, data: Uint8Array): Promise<Piece[]> {
   const whole: Piece = {
     kind: file.type === "application/pdf" ? "pdf" : "image",
@@ -90,11 +106,12 @@ async function piecesFor(file: UploadedFile, data: Uint8Array): Promise<Piece[]>
   const total = doc.getPageCount();
   if (total <= MAX_PAGES_PER_REQUEST) return [{ ...whole, pages: total }];
 
+  const passo = Math.max(1, MAX_PAGES_PER_REQUEST - PAGINE_SOVRAPPOSTE);
   const pieces: Piece[] = [];
-  for (let start = 0; start < total; start += MAX_PAGES_PER_REQUEST) {
-    pieces.push(
-      await pdfSlice(doc, file.name, 0, start, Math.min(start + MAX_PAGES_PER_REQUEST, total))
-    );
+  for (let start = 0; start < total; start += passo) {
+    const end = Math.min(start + MAX_PAGES_PER_REQUEST, total);
+    pieces.push(await pdfSlice(doc, file.name, 0, start, end));
+    if (end === total) break;
   }
   return pieces;
 }
@@ -132,6 +149,26 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+// Le citazioni sono passaggi che l'API estrae dal PDF, non testo generato dal
+// modello: sono la sola parte della risposta che non può essere inventata, e
+// servono a confermare che un importo esiste davvero in quella pagina.
+function citazioniDi(message: Anthropic.Message, offset: number): Citazione[] {
+  const out: Citazione[] = [];
+
+  for (const block of message.content) {
+    if (block.type !== "text" || !block.citations) continue;
+    for (const citazione of block.citations) {
+      if (citazione.type === "page_location") {
+        out.push({ pagina: citazione.start_page_number + offset, testo: citazione.cited_text });
+      } else if ("cited_text" in citazione) {
+        out.push({ pagina: 0, testo: citazione.cited_text });
+      }
+    }
+  }
+
+  return out;
+}
+
 async function callModel(
   anthropic: Anthropic,
   piece: Piece,
@@ -145,6 +182,9 @@ async function callModel(
       ? {
           type: "document",
           source: { type: "base64", media_type: "application/pdf", data: base64 },
+          title: piece.name,
+          // Le immagini non supportano le citazioni: solo i PDF.
+          citations: { enabled: true },
         }
       : {
           type: "image",
@@ -155,17 +195,24 @@ async function callModel(
           },
         };
 
-  const message = await anthropic.messages.create({
-    model: EXTRACTION_MODEL,
-    max_tokens: EXTRACTION_MAX_TOKENS,
-    temperature: 0,
-    messages: [
-      {
-        role: "user",
-        content: [block, { type: "text", text: extractionPrompt(label(piece), index, total, mode) }],
-      },
-    ],
-  });
+  // Streaming perché l'input è un PDF intero e il ragionamento allunga il
+  // turno: una richiesta non-stream rischierebbe il timeout HTTP.
+  const message = await anthropic.messages
+    .stream({
+      model: EXTRACTION_MODEL,
+      max_tokens: EXTRACTION_MAX_TOKENS,
+      // Leggere una tabella e ricondurre le voci alle categorie è lavoro di
+      // ragionamento: senza, gli errori di attribuzione aumentano.
+      thinking: { type: "adaptive" },
+      output_config: { effort: "high" },
+      messages: [
+        {
+          role: "user",
+          content: [block, { type: "text", text: extractionPrompt(label(piece), index, total, mode) }],
+        },
+      ],
+    })
+    .finalMessage();
 
   if (message.stop_reason === "max_tokens") {
     throw new Error("risposta troncata, documento troppo denso");
@@ -176,7 +223,15 @@ async function callModel(
     .map((b) => b.text)
     .join("");
 
-  return normalizeExtraction(parseExtractionOutput(text));
+  const ctx: ContestoEstrazione = {
+    documento: piece.name,
+    // Il modello numera le pagine a partire da quelle che riceve: senza
+    // l'offset la fonte rimanderebbe alla pagina sbagliata del PDF.
+    offsetPagina: piece.offset,
+    citazioni: citazioniDi(message, piece.offset),
+  };
+
+  return normalizeExtraction(parseExtractionOutput(text), ctx);
 }
 
 // Il tetto di token per richiesta dipende dal tier dell'account e non è noto
@@ -204,6 +259,61 @@ async function analyzePiece(
     }
     return results;
   }
+}
+
+// Le pagine da cui vengono gli importi di un bilancio, dentro un documento.
+function paginePerDocumento(bilancio: ExtractedBilancio): Map<string, number[]> {
+  const perDocumento = new Map<string, number[]>();
+
+  for (const campo of CAMPI_IMPORTO) {
+    const fonte = bilancio.fonti[campo];
+    if (!fonte?.pagina) continue;
+    const pagine = perDocumento.get(fonte.documento) ?? [];
+    pagine.push(fonte.pagina);
+    perDocumento.set(fonte.documento, pagine);
+  }
+
+  return perDocumento;
+}
+
+// Quando i conti di un esercizio non tornano, la causa più frequente è una
+// tabella letta a metà. Invece di arrendersi si rilegge una volta sola il
+// tratto di documento da cui vengono quegli importi, questa volta intero.
+async function rileggiBilancio(
+  anthropic: Anthropic,
+  bilancio: ExtractedBilancio,
+  documenti: Map<string, { doc: PDFDocument; pagine: number }>,
+  mode: ExtractionMode
+): Promise<ExtractionResult | null> {
+  for (const [nome, pagine] of paginePerDocumento(bilancio)) {
+    const sorgente = documenti.get(nome);
+    if (!sorgente) continue;
+
+    // Una pagina di margine per prendere l'intestazione della tabella e la
+    // riga del totale, che spesso cadono appena fuori.
+    const da = Math.max(0, Math.min(...pagine) - 2);
+    const a = Math.min(sorgente.pagine, Math.max(...pagine) + 1);
+    if (a - da < 1 || a - da > MAX_PAGES_PER_REQUEST) continue;
+
+    const piece = await pdfSlice(sorgente.doc, nome, 0, da, a);
+    console.log(`Rilettura mirata di ${label(piece)} per l'esercizio ${bilancio.anno}`);
+    return await callModel(anthropic, piece, 1, 1, mode);
+  }
+
+  return null;
+}
+
+function riepilogoControlli(bilanci: ExtractedBilancio[]): string {
+  const righe: string[] = [];
+
+  for (const bilancio of bilanci) {
+    for (const controllo of controlliBilancio(bilancio)) {
+      if (controllo.livello !== "errore") continue;
+      righe.push(`${bilancio.anno || "anno non riconosciuto"}: ${controllo.messaggio}`);
+    }
+  }
+
+  return righe.join(" ");
 }
 
 // Documenti reali multi-pagina possono richiedere 40-90+ secondi con Claude,
@@ -252,12 +362,25 @@ export default async (req: Request) => {
     });
 
     const pieces: Piece[] = [];
+    // I PDF aperti restano a disposizione per le eventuali riletture mirate.
+    const sorgenti = new Map<string, { doc: PDFDocument; pagine: number }>();
+
     for (const file of files) {
       const { data, error } = await supabase.storage.from(BUCKET).download(file.path);
       if (error || !data) {
         throw new Error(`Download fallito per ${file.name}: ${error?.message ?? "sconosciuto"}`);
       }
-      pieces.push(...(await piecesFor(file, new Uint8Array(await data.arrayBuffer()))));
+      const bytes = new Uint8Array(await data.arrayBuffer());
+      pieces.push(...(await piecesFor(file, bytes)));
+
+      if (file.type === "application/pdf") {
+        try {
+          const doc = await PDFDocument.load(bytes, { ignoreEncryption: true });
+          sorgenti.set(file.name, { doc, pagine: doc.getPageCount() });
+        } catch {
+          // Già segnalato da piecesFor: senza sorgente si salta la rilettura.
+        }
+      }
     }
 
     console.log(`${files.length} documenti divisi in ${pieces.length} blocchi da analizzare`);
@@ -289,17 +412,66 @@ export default async (req: Request) => {
       throw new Error(failures[0] ?? "Nessun dato estratto dai documenti");
     }
 
-    const extracted = mergeExtractions(results);
-    if (failures.length) {
-      extracted.note = [extracted.note, `Non analizzati: ${failures.join("; ")}.`]
-        .filter(Boolean)
-        .join(" ");
+    let extracted = mergeExtractions(results);
+
+    // Seconda passata solo sugli esercizi che non quadrano. Le riletture
+    // vengono messe per prime nella fusione, così a parità di fonte vince la
+    // lettura fatta sulla tabella intera e l'altra resta come conflitto.
+    const daRileggere = extracted.bilanci.filter((b) =>
+      controlliBilancio(b).some((c) => c.livello === "errore" && c.campo !== "")
+    );
+
+    const riletture: ExtractionResult[] = [];
+    for (const bilancio of daRileggere.slice(0, MAX_RILETTURE)) {
+      if (Date.now() > deadline) break;
+      await store.setJSON(jobId, {
+        status: "running",
+        progress: {
+          fatti: pieces.length,
+          totale: pieces.length,
+          documento: `verifica dei conti dell'esercizio ${bilancio.anno || "?"}`,
+        },
+      });
+      try {
+        const rilettura = await rileggiBilancio(anthropic, bilancio, sorgenti, mode);
+        if (rilettura) riletture.push(rilettura);
+      } catch (error) {
+        console.error(`Rilettura fallita per l'esercizio ${bilancio.anno}:`, error);
+      }
     }
 
-    await store.setJSON(jobId, { status: "done", data: extracted });
+    if (riletture.length) extracted = mergeExtractions([...riletture, extracted]);
 
-    // Pulizia: i file temporanei non servono più una volta estratti.
-    await supabase.storage.from(BUCKET).remove(files.map((f) => f.path));
+    // I file restano archiviati: la provenienza di un importo serve a poco se
+    // il documento a cui rimanda è stato cancellato.
+    const archiviati: UploadedFile[] = [];
+    for (const file of files) {
+      const destinazione = file.path.startsWith(PREFISSO_TEMPORANEO)
+        ? PREFISSO_ARCHIVIO + file.path.slice(PREFISSO_TEMPORANEO.length)
+        : file.path;
+
+      if (destinazione !== file.path) {
+        const { error } = await supabase.storage.from(BUCKET).move(file.path, destinazione);
+        if (error) {
+          console.warn(`Archiviazione fallita per ${file.name}:`, error.message);
+          archiviati.push(file);
+          continue;
+        }
+      }
+      archiviati.push({ ...file, path: destinazione });
+    }
+    extracted.documenti = archiviati;
+
+    const problemi = riepilogoControlli(extracted.bilanci);
+    extracted.note = [
+      extracted.note,
+      problemi && `Da verificare: ${problemi}`,
+      failures.length && `Non analizzati: ${failures.join("; ")}.`,
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    await store.setJSON(jobId, { status: "done", data: extracted });
   } catch (error) {
     console.error("Background extraction error:", error);
     await store.setJSON(jobId, { status: "error", error: messageOf(error) });

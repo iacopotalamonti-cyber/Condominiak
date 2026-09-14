@@ -1,0 +1,11 @@
+# Migrazioni
+
+Le migrazioni vanno applicate in ordine di nome, una sola volta, sul progetto
+Supabase del condominio. Due modi equivalenti:
+
+- dalla dashboard Supabase: **SQL Editor**, incolla il contenuto del file, Run;
+- da riga di comando, con la Supabase CLI collegata al progetto:
+  `supabase db push`.
+
+Sono scritte per essere rieseguibili senza danno (`add column if not exists`):
+lanciarle due volte non rompe nulla.

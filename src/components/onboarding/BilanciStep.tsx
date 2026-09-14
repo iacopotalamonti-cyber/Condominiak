@@ -1,32 +1,67 @@
 "use client";
 
-import { Wallet } from "lucide-react";
+import { Plus, Trash2, Wallet } from "lucide-react";
 
+import {
+  CAMPI_IMPORTO,
+  bilancioVuoto,
+  controlliBilancio,
+  etichettaCampo,
+  leggiImporto,
+  scriviImporto,
+  sommaSpese,
+} from "@/lib/anthropic";
+import { percorsoDocumento } from "@/lib/documenti-client";
+import { formatEuro } from "@/lib/condotwin-calculations";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AiFieldWrapper } from "./AiFieldWrapper";
-import { CATEGORIE_SPESA_LABEL } from "@/lib/condotwin-calculations";
-import type { ExtractedBilancio, ExtractedSpese } from "@/lib/types";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CampoImporto } from "@/components/estrazione/CampoImporto";
+import { ControlliBilancio } from "@/components/estrazione/ControlliBilancio";
+import type { CampoImporto as CampoImportoKey, ExtractedBilancio, UploadedFile } from "@/lib/types";
 
 interface BilanciStepProps {
   bilanci: ExtractedBilancio[];
   onBilanciChange: (bilanci: ExtractedBilancio[]) => void;
-  spese: ExtractedSpese;
-  onSpeseChange: (spese: ExtractedSpese) => void;
-  aiFilled: boolean;
+  documenti: UploadedFile[];
 }
 
-export function BilanciStep({
-  bilanci,
-  onBilanciChange,
-  spese,
-  onSpeseChange,
-  aiFilled,
-}: BilanciStepProps) {
-  function updateBilancio(index: number, patch: Partial<ExtractedBilancio>) {
-    onBilanciChange(bilanci.map((b, i) => (i === index ? { ...b, ...patch } : b)));
+const CAMPI_TOTALI: CampoImportoKey[] = ["prev", "cons", "fondo", "totale"];
+const CAMPI_SPESA = CAMPI_IMPORTO.filter((c) => c.startsWith("spesa."));
+
+export function BilanciStep({ bilanci, onBilanciChange, documenti }: BilanciStepProps) {
+  function aggiorna(indice: number, modifica: (bilancio: ExtractedBilancio) => void) {
+    onBilanciChange(
+      bilanci.map((bilancio, i) => {
+        if (i !== indice) return bilancio;
+        const copia: ExtractedBilancio = {
+          ...bilancio,
+          spese: { ...bilancio.spese },
+          fonti: { ...bilancio.fonti },
+          conflitti: { ...bilancio.conflitti },
+        };
+        modifica(copia);
+        return copia;
+      })
+    );
   }
+
+  function aggiungi() {
+    const anni = bilanci.map((b) => b.anno).filter(Boolean);
+    const anno = anni.length ? Math.min(...anni) - 1 : new Date().getFullYear() - 1;
+    // In coda e senza riordinare: la posizione identifica la scheda, e un
+    // riordino sposterebbe sotto i piedi quella aperta.
+    onBilanciChange([...bilanci, bilancioVuoto(anno)]);
+  }
+
+  function rimuovi(indice: number) {
+    onBilanciChange(bilanci.filter((_, i) => i !== indice));
+  }
+
+  // L'anno è modificabile, quindi non può identificare la scheda: due esercizi
+  // sullo stesso anno si sovrapporrebbero. La posizione sì.
+  const attivo = bilanci.length ? "0" : "";
 
   return (
     <div className="flex flex-col gap-8">
@@ -35,80 +70,120 @@ export function BilanciStep({
         <div>
           <h2 className="text-lg font-semibold">Bilanci e voci di spesa</h2>
           <p className="text-sm text-muted-foreground">
-            Preventivo, consuntivo e fondo riserva degli ultimi 5 anni.
+            Un esercizio per scheda, con le sue voci di spesa. Sotto ogni importo trovi la pagina
+            del documento da cui è stato letto: aprila se un numero non ti torna.
           </p>
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-20">Anno</TableHead>
-              <TableHead>Preventivo (€)</TableHead>
-              <TableHead>Consuntivo (€)</TableHead>
-              <TableHead>Fondo riserva (€)</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {bilanci.map((b, i) => (
-              <TableRow key={b.anno}>
-                <TableCell className="font-medium">{b.anno}</TableCell>
-                <TableCell>
-                  <AiFieldWrapper fromAi={aiFilled && Boolean(b.prev)}>
-                    <Input
-                      type="number"
-                      value={b.prev || ""}
-                      onChange={(e) => updateBilancio(i, { prev: parseFloat(e.target.value) || 0 })}
-                    />
-                  </AiFieldWrapper>
-                </TableCell>
-                <TableCell>
-                  <AiFieldWrapper fromAi={aiFilled && Boolean(b.cons)}>
-                    <Input
-                      type="number"
-                      value={b.cons || ""}
-                      onChange={(e) => updateBilancio(i, { cons: parseFloat(e.target.value) || 0 })}
-                    />
-                  </AiFieldWrapper>
-                </TableCell>
-                <TableCell>
-                  <AiFieldWrapper fromAi={aiFilled && Boolean(b.fondo)}>
-                    <Input
-                      type="number"
-                      value={b.fondo || ""}
-                      onChange={(e) => updateBilancio(i, { fondo: parseFloat(e.target.value) || 0 })}
-                    />
-                  </AiFieldWrapper>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-
-      <div>
-        <h3 className="mb-3 text-sm font-medium text-muted-foreground">
-          Voci di spesa (anno corrente)
-        </h3>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-          {(Object.keys(spese) as (keyof ExtractedSpese)[]).map((cat) => (
-            <div key={cat} className="flex flex-col gap-1.5">
-              <Label htmlFor={`spesa-${cat}`}>{CATEGORIE_SPESA_LABEL[cat] ?? cat}</Label>
-              <AiFieldWrapper fromAi={aiFilled && Boolean(spese[cat])}>
-                <Input
-                  id={`spesa-${cat}`}
-                  type="number"
-                  value={spese[cat] || ""}
-                  onChange={(e) =>
-                    onSpeseChange({ ...spese, [cat]: parseFloat(e.target.value) || 0 })
-                  }
-                />
-              </AiFieldWrapper>
-            </div>
-          ))}
+      {!bilanci.length ? (
+        <div className="flex flex-col items-start gap-3 rounded-md border border-dashed px-4 py-6">
+          <p className="text-sm text-muted-foreground">
+            Nessun esercizio: aggiungine uno e compilalo a mano, oppure torna indietro e carica i
+            bilanci.
+          </p>
+          <Button variant="outline" onClick={aggiungi}>
+            <Plus />
+            Aggiungi un esercizio
+          </Button>
         </div>
-      </div>
+      ) : (
+        <Tabs defaultValue={attivo} className="gap-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <TabsList>
+              {bilanci.map((bilancio, indice) => (
+                <TabsTrigger key={indice} value={String(indice)}>
+                  {bilancio.anno || "Senza anno"}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            <Button variant="outline" size="sm" onClick={aggiungi}>
+              <Plus />
+              Aggiungi esercizio
+            </Button>
+          </div>
+
+          {bilanci.map((bilancio, indice) => {
+            const controlli = controlliBilancio(bilancio);
+            return (
+              <TabsContent key={indice} value={String(indice)} className="flex flex-col gap-6">
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div className="flex flex-col gap-1.5 sm:max-w-40">
+                    <Label htmlFor={`anno-${indice}`}>Anno dell&apos;esercizio</Label>
+                    <Input
+                      id={`anno-${indice}`}
+                      type="number"
+                      value={bilancio.anno || ""}
+                      onChange={(e) =>
+                        aggiorna(indice, (b) => {
+                          b.anno = parseInt(e.target.value, 10) || 0;
+                        })
+                      }
+                    />
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => rimuovi(indice)}>
+                    <Trash2 />
+                    Rimuovi esercizio
+                  </Button>
+                </div>
+
+                <ControlliBilancio
+                  controlli={controlli}
+                  messaggioOk="I conti di questo esercizio tornano."
+                />
+
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                  {CAMPI_TOTALI.map((campo) => (
+                    <CampoImporto
+                      key={campo}
+                      id={`${indice}-${campo}`}
+                      etichetta={etichettaCampo(campo)}
+                      valore={leggiImporto(bilancio, campo)}
+                      fonte={bilancio.fonti[campo]}
+                      conflitti={bilancio.conflitti[campo]}
+                      percorso={percorsoDocumento(documenti, bilancio.fonti[campo])}
+                      onChange={(v) =>
+                        aggiorna(indice, (b) => {
+                          scriviImporto(b, campo, v);
+                          delete b.conflitti[campo];
+                        })
+                      }
+                    />
+                  ))}
+                </div>
+
+                <div className="flex flex-col gap-3 border-t pt-4">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium">Voci di spesa {bilancio.anno || ""}</span>
+                    <span className="text-muted-foreground">
+                      Somma delle voci: {formatEuro(sommaSpese(bilancio.spese))}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {CAMPI_SPESA.map((campo) => (
+                      <CampoImporto
+                        key={campo}
+                        id={`${indice}-${campo}`}
+                        etichetta={etichettaCampo(campo)}
+                        valore={leggiImporto(bilancio, campo)}
+                        fonte={bilancio.fonti[campo]}
+                        conflitti={bilancio.conflitti[campo]}
+                        percorso={percorsoDocumento(documenti, bilancio.fonti[campo])}
+                        onChange={(v) =>
+                          aggiorna(indice, (b) => {
+                            scriviImporto(b, campo, v);
+                            delete b.conflitti[campo];
+                          })
+                        }
+                      />
+                    ))}
+                  </div>
+                </div>
+              </TabsContent>
+            );
+          })}
+        </Tabs>
+      )}
     </div>
   );
 }

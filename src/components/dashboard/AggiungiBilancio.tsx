@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Sparkles } from "lucide-react";
 
@@ -10,43 +10,75 @@ import {
   caricaSuStorage,
   messaggioErrore,
 } from "@/lib/extraction-client";
+import {
+  CAMPI_IMPORTO,
+  bilancioVuoto,
+  controlliBilancio,
+  etichettaCampo,
+  leggiImporto,
+  scriviImporto,
+  sommaSpese,
+} from "@/lib/anthropic";
+import { percorsoDocumento } from "@/lib/documenti-client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CATEGORIE_SPESA_LABEL, formatEuro } from "@/lib/condotwin-calculations";
-import type { ExtractedSpese } from "@/lib/types";
-
-interface Estratto {
-  anno: string;
-  prev: number;
-  cons: number;
-  fondo: number;
-  spese: ExtractedSpese;
-  note: string;
-}
+import { CampoImporto } from "@/components/estrazione/CampoImporto";
+import { ControlliBilancio } from "@/components/estrazione/ControlliBilancio";
+import { formatEuro } from "@/lib/condotwin-calculations";
+import type { CampoImporto as CampoImportoKey, ExtractedBilancio, UploadedFile } from "@/lib/types";
 
 interface AggiungiBilancioProps {
   condominiumId: string;
   anniEsistenti: number[];
 }
 
+const CAMPI_TOTALI: CampoImportoKey[] = ["prev", "cons", "fondo", "totale"];
+const CAMPI_SPESA = CAMPI_IMPORTO.filter((c) => c.startsWith("spesa."));
+
 export function AggiungiBilancio({ condominiumId, anniEsistenti }: AggiungiBilancioProps) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [file, setFile] = useState<File | null>(null);
-  const [estratto, setEstratto] = useState<Estratto | null>(null);
+  const [bilancio, setBilancio] = useState<ExtractedBilancio | null>(null);
+  const [annoTesto, setAnnoTesto] = useState("");
+  const [documenti, setDocumenti] = useState<UploadedFile[]>([]);
+  const [note, setNote] = useState("");
   const [lavorando, setLavorando] = useState(false);
   const [stato, setStato] = useState("");
   const [errore, setErrore] = useState<string | null>(null);
   const [esito, setEsito] = useState<string | null>(null);
+  const [confermato, setConfermato] = useState(false);
 
   function reset() {
     setFile(null);
-    setEstratto(null);
+    setBilancio(null);
+    setAnnoTesto("");
+    setDocumenti([]);
+    setNote("");
+    setConfermato(false);
     setStato("");
     if (inputRef.current) inputRef.current.value = "";
+  }
+
+  function aggiorna(campo: CampoImportoKey, valore: number) {
+    setBilancio((precedente) => {
+      if (!precedente) return precedente;
+      const copia: ExtractedBilancio = {
+        ...precedente,
+        spese: { ...precedente.spese },
+        fonti: { ...precedente.fonti },
+        conflitti: { ...precedente.conflitti },
+      };
+      scriviImporto(copia, campo, valore);
+      // Correggere a mano un importo risolve il conflitto: la scelta è stata
+      // fatta, non ha più senso riproporla.
+      delete copia.conflitti[campo];
+      return copia;
+    });
   }
 
   async function analizza() {
@@ -61,16 +93,12 @@ export function AggiungiBilancio({ condominiumId, anniEsistenti }: AggiungiBilan
       setStato("Analisi AI in corso…");
 
       const risultato = await analizzaDocumenti(caricati, "bilancio", setStato);
-      const bilancio = risultato.bilanci[0];
+      const estratto = risultato.bilanci[0] ?? bilancioVuoto();
 
-      setEstratto({
-        anno: bilancio?.anno ? String(bilancio.anno) : "",
-        prev: bilancio?.prev ?? 0,
-        cons: bilancio?.cons ?? 0,
-        fondo: bilancio?.fondo ?? 0,
-        spese: risultato.spese,
-        note: risultato.note,
-      });
+      setBilancio(estratto);
+      setAnnoTesto(estratto.anno ? String(estratto.anno) : "");
+      setDocumenti(risultato.documenti);
+      setNote(risultato.note);
     } catch (err) {
       setErrore(messaggioErrore(err));
     } finally {
@@ -79,8 +107,28 @@ export function AggiungiBilancio({ condominiumId, anniEsistenti }: AggiungiBilan
     }
   }
 
+  const annoNumero = Number(annoTesto);
+  const annoValido = Number.isInteger(annoNumero) && annoNumero > 1900;
+  const annoGiaPresente = annoValido && anniEsistenti.includes(annoNumero);
+
+  // I controlli girano sui valori attuali, non su quelli estratti: correggere
+  // un importo deve far sparire l'avviso subito, senza rianalizzare nulla.
+  const controlli = useMemo(
+    () => (bilancio ? controlliBilancio({ ...bilancio, anno: annoValido ? annoNumero : 0 }) : []),
+    [bilancio, annoValido, annoNumero]
+  );
+
+  const totaleSpese = bilancio ? sommaSpese(bilancio.spese) : 0;
+
+  // Un anno mancante o assurdo impedisce di salvare: senza, la riga finirebbe
+  // nello storico sotto l'esercizio sbagliato. I conti che non tornano invece
+  // non bloccano — il documento può averli così — ma chiedono di dichiarare di
+  // aver guardato il PDF, che è esattamente il controllo che serve.
+  const bloccanti = controlli.filter((c) => c.livello === "errore" && c.campo === "");
+  const daConfermare = controlli.some((c) => c.livello === "errore" && c.campo !== "");
+
   async function salva() {
-    if (!estratto) return;
+    if (!bilancio) return;
     setLavorando(true);
     setErrore(null);
 
@@ -90,20 +138,22 @@ export function AggiungiBilancio({ condominiumId, anniEsistenti }: AggiungiBilan
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           condominiumId,
-          anno: Number(estratto.anno),
-          prev: estratto.prev,
-          cons: estratto.cons,
-          fondo: estratto.fondo,
-          spese: estratto.spese,
+          anno: annoNumero,
+          prev: bilancio.prev,
+          cons: bilancio.cons,
+          fondo: bilancio.fondo,
+          totale: bilancio.totale,
+          spese: bilancio.spese,
+          fonti: bilancio.fonti,
+          documentoPath: documenti[0]?.path ?? null,
         }),
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error || "Salvataggio fallito");
 
-      const anno = estratto.anno;
       reset();
-      setEsito(`Bilancio ${anno} aggiunto allo storico.`);
-      router.push(`/dashboard/spese?anno=${anno}`);
+      setEsito(`Bilancio ${annoNumero} aggiunto allo storico.`);
+      router.push(`/dashboard/spese?anno=${annoNumero}`);
       router.refresh();
     } catch (err) {
       setErrore(messaggioErrore(err));
@@ -111,16 +161,6 @@ export function AggiungiBilancio({ condominiumId, anniEsistenti }: AggiungiBilan
       setLavorando(false);
     }
   }
-
-  const voci = estratto
-    ? Object.entries(estratto.spese)
-        .filter(([, importo]) => importo > 0)
-        .sort(([, a], [, b]) => b - a)
-    : [];
-  const totale = voci.reduce((somma, [, importo]) => somma + importo, 0);
-  const annoNumero = Number(estratto?.anno);
-  const annoValido = Number.isInteger(annoNumero) && annoNumero > 1900;
-  const annoGiaPresente = annoValido && anniEsistenti.includes(annoNumero);
 
   return (
     <Card>
@@ -135,12 +175,12 @@ export function AggiungiBilancio({ condominiumId, anniEsistenti }: AggiungiBilan
           <p className="rounded-md bg-success/10 px-3 py-2 text-sm text-success">{esito}</p>
         )}
 
-        {!estratto ? (
+        {!bilancio ? (
           <>
             <p className="text-sm text-muted-foreground">
               Carica il bilancio di un singolo esercizio — preventivo o consuntivo, un anno alla
-              volta: l&apos;AI ne ricava l&apos;anno e le voci di spesa, e te le mostra prima di
-              salvarle.
+              volta. L&apos;AI ne ricava l&apos;anno e le voci di spesa e te le mostra con la pagina
+              del documento da cui vengono, così puoi verificarle e correggerle prima di salvare.
             </p>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <div className="flex flex-1 flex-col gap-1.5">
@@ -168,16 +208,11 @@ export function AggiungiBilancio({ condominiumId, anniEsistenti }: AggiungiBilan
               <Input
                 id="bilancio-anno"
                 type="number"
-                value={estratto.anno}
-                onChange={(e) => setEstratto({ ...estratto, anno: e.target.value })}
+                value={annoTesto}
+                onChange={(e) => setAnnoTesto(e.target.value)}
               />
             </div>
 
-            {!annoValido && (
-              <p className="text-sm text-warning">
-                L&apos;anno non è stato riconosciuto nel documento: indicalo tu prima di salvare.
-              </p>
-            )}
             {annoGiaPresente && (
               <p className="text-sm text-warning">
                 L&apos;anno {annoNumero} è già presente nello storico: i dati esistenti verranno
@@ -185,55 +220,76 @@ export function AggiungiBilancio({ condominiumId, anniEsistenti }: AggiungiBilan
               </p>
             )}
 
-            <div className="grid grid-cols-3 gap-4 border-t pt-4 text-sm">
-              <div>
-                <p className="text-muted-foreground">Preventivo</p>
-                <p className="font-medium tabular-nums">{formatEuro(estratto.prev)}</p>
+            <ControlliBilancio
+              controlli={controlli}
+              messaggioOk="I conti tornano: le voci di spesa sommano al totale del documento."
+            />
+
+            <div className="grid grid-cols-2 gap-4 border-t pt-4 sm:grid-cols-4">
+              {CAMPI_TOTALI.map((campo) => (
+                <CampoImporto
+                  key={campo}
+                  id={`bilancio-${campo}`}
+                  etichetta={etichettaCampo(campo)}
+                  valore={leggiImporto(bilancio, campo)}
+                  fonte={bilancio.fonti[campo]}
+                  conflitti={bilancio.conflitti[campo]}
+                  percorso={percorsoDocumento(documenti, bilancio.fonti[campo])}
+                  onChange={(v) => aggiorna(campo, v)}
+                />
+              ))}
+            </div>
+
+            <div className="flex flex-col gap-3 border-t pt-4">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium">Voci di spesa</span>
+                <span className="text-muted-foreground">
+                  Somma delle voci: {formatEuro(totaleSpese)}
+                </span>
               </div>
-              <div>
-                <p className="text-muted-foreground">Consuntivo</p>
-                <p className="font-medium tabular-nums">{formatEuro(estratto.cons)}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Fondo riserva</p>
-                <p className="font-medium tabular-nums">{formatEuro(estratto.fondo)}</p>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {CAMPI_SPESA.map((campo) => (
+                  <CampoImporto
+                    key={campo}
+                    id={`bilancio-${campo}`}
+                    etichetta={etichettaCampo(campo)}
+                    valore={leggiImporto(bilancio, campo)}
+                    fonte={bilancio.fonti[campo]}
+                    conflitti={bilancio.conflitti[campo]}
+                    percorso={percorsoDocumento(documenti, bilancio.fonti[campo])}
+                    onChange={(v) => aggiorna(campo, v)}
+                  />
+                ))}
               </div>
             </div>
 
-            {voci.length > 0 ? (
-              <div className="flex flex-col gap-2 border-t pt-4">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium">Voci di spesa rilevate</span>
-                  <span className="text-muted-foreground">Totale: {formatEuro(totale)}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
-                  {voci.map(([categoria, importo]) => (
-                    <div key={categoria} className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">
-                        {CATEGORIE_SPESA_LABEL[categoria] ?? categoria}
-                      </span>
-                      <span className="font-medium tabular-nums">{formatEuro(importo)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <p className="border-t pt-4 text-sm text-muted-foreground">
-                Nessuna voce di spesa rilevata in questo documento.
-              </p>
+            {note && (
+              <p className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">{note}</p>
             )}
 
-            {estratto.note && (
-              <p className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
-                {estratto.note}
-              </p>
+            {daConfermare && (
+              <label className="flex items-start gap-2 rounded-md border border-warning/40 px-3 py-2 text-sm">
+                <Checkbox
+                  checked={confermato}
+                  onCheckedChange={(valore) => setConfermato(valore === true)}
+                  className="mt-0.5"
+                />
+                <span>
+                  Ho aperto il documento e verificato questi importi: salvali comunque.
+                </span>
+              </label>
             )}
 
             <div className="flex items-center justify-between border-t pt-4">
               <Button variant="ghost" onClick={reset} disabled={lavorando}>
                 Annulla
               </Button>
-              <Button onClick={salva} disabled={!annoValido || lavorando}>
+              <Button
+                onClick={salva}
+                disabled={
+                  !annoValido || bloccanti.length > 0 || (daConfermare && !confermato) || lavorando
+                }
+              >
                 {lavorando && <Loader2 className="animate-spin" />}
                 {annoGiaPresente ? "Sostituisci nello storico" : "Aggiungi allo storico"}
               </Button>

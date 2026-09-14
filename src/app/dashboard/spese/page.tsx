@@ -4,8 +4,10 @@ import { SpeseChart } from "@/components/dashboard/SpeseChart";
 import { AggiungiBilancio } from "@/components/dashboard/AggiungiBilancio";
 import { AnnoSelector } from "@/components/dashboard/AnnoSelector";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { FonteLink } from "@/components/estrazione/FonteLink";
 import { CATEGORIE_SPESA_LABEL, formatEuro } from "@/lib/condotwin-calculations";
-import type { Spesa } from "@/lib/types";
+import { TOLLERANZA_QUADRATURA } from "@/lib/anthropic";
+import type { Bilancio, Spesa } from "@/lib/types";
 
 export default async function SpesePage({
   searchParams,
@@ -16,13 +18,20 @@ export default async function SpesePage({
   const supabase = await createClient();
   const annoCorrente = new Date().getFullYear();
 
-  const { data } = await supabase
-    .from("spese")
-    .select("*")
-    .eq("condominium_id", condominium.id)
-    .order("anno", { ascending: false });
+  const [{ data }, { data: datiBilanci }] = await Promise.all([
+    supabase
+      .from("spese")
+      .select("*")
+      .eq("condominium_id", condominium.id)
+      .order("anno", { ascending: false }),
+    supabase
+      .from("bilanci")
+      .select("*")
+      .eq("condominium_id", condominium.id),
+  ]);
 
   const spese = (data ?? []) as Spesa[];
+  const bilanci = (datiBilanci ?? []) as Bilancio[];
   const anni = Array.from(new Set(spese.map((s) => s.anno))).sort((a, b) => b - a);
 
   const { anno: annoParam } = await searchParams;
@@ -35,6 +44,14 @@ export default async function SpesePage({
 
   const speseAnno = spese.filter((s) => s.anno === annoSelezionato);
   const totale = speseAnno.reduce((sum, s) => sum + s.importo, 0);
+
+  // Il totale stampato sul documento, quando è stato registrato: confrontarlo
+  // con la somma delle voci dice in un colpo d'occhio se l'estrazione ha perso
+  // o duplicato qualcosa.
+  const bilancioAnno = bilanci.find((b) => b.anno === annoSelezionato);
+  const totaleDocumento = bilancioAnno?.totale_documento ?? null;
+  const scostamento = totaleDocumento ? totale - totaleDocumento : 0;
+  const quadra = Math.abs(scostamento) <= TOLLERANZA_QUADRATURA;
 
   return (
     <div className="flex flex-col gap-6">
@@ -63,16 +80,32 @@ export default async function SpesePage({
             </span>
           </CardHeader>
           <CardContent className="flex flex-col gap-6">
+            {totaleDocumento !== null && !quadra && (
+              <p className="rounded-md bg-warning/10 px-3 py-2 text-sm text-warning">
+                La somma delle voci ({formatEuro(totale)}) non corrisponde al totale stampato nel
+                documento ({formatEuro(totaleDocumento)}): differenza di{" "}
+                {formatEuro(Math.abs(scostamento))}. Ricarica il bilancio di quest&apos;anno per
+                rivedere le voci.
+              </p>
+            )}
             <SpeseChart spese={speseAnno} />
             <div className="grid grid-cols-2 gap-x-6 gap-y-2 border-t pt-4 sm:grid-cols-3">
               {[...speseAnno]
                 .sort((a, b) => b.importo - a.importo)
                 .map((s) => (
-                  <div key={s.id} className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">
-                      {CATEGORIE_SPESA_LABEL[s.categoria] ?? s.categoria}
-                    </span>
-                    <span className="font-medium tabular-nums">{formatEuro(s.importo)}</span>
+                  <div key={s.id} className="flex flex-col gap-0.5">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        {CATEGORIE_SPESA_LABEL[s.categoria] ?? s.categoria}
+                      </span>
+                      <span className="font-medium tabular-nums">{formatEuro(s.importo)}</span>
+                    </div>
+                    <FonteLink
+                      pagina={s.fonte_pagina}
+                      testo={s.fonte_testo}
+                      verificata={s.fonte_verificata}
+                      percorso={s.documento_path}
+                    />
                   </div>
                 ))}
             </div>

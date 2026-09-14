@@ -1,4 +1,6 @@
 import type {
+  CampoImporto,
+  Controllo,
   ExtractedBilancio,
   ExtractedImpianti,
   ExtractedImpiantiDettagli,
@@ -7,11 +9,17 @@ import type {
   ExtractedSpese,
   ExtractedUnita,
   ExtractionResult,
+  Fonte,
+  ValoreScartato,
 } from "./types";
 
-// Modello specificato nella spec di prodotto CondoTwin.
-export const EXTRACTION_MODEL = "claude-sonnet-4-6";
-export const EXTRACTION_MAX_TOKENS = 16000;
+// I bilanci sono tabelle fitte di numeri e l'errore di lettura non si vede:
+// vale la pena del modello più capace, con il ragionamento acceso.
+export const EXTRACTION_MODEL = "claude-opus-5";
+// Con il ragionamento attivo i token di thinking rientrano in questo tetto: in
+// streaming non c'è il rischio di timeout HTTP, e uno spazio più largo evita
+// che la risposta venga troncata a metà JSON.
+export const EXTRACTION_MAX_TOKENS = 32000;
 
 // Il tier dell'account impone un tetto di token in input per singola richiesta
 // molto più basso della context window del modello: superarlo fa fallire la
@@ -19,83 +27,14 @@ export const EXTRACTION_MAX_TOKENS = 16000;
 // uno per richiesta, e i PDF più lunghi di così spezzati in blocchi di pagine.
 export const MAX_PAGES_PER_REQUEST = 20;
 
-export const EXTRACTION_SCHEMA = `{
-  "info": {"via":"","citta":"","cap":"","annoCostr":"","piani":0,"nApt":0,"pianoTerra":true,"amm":"","emailAmm":"","telAmm":""},
-  "unita": [{"int":1,"piano":"T","mq":0,"ml":0,"nome":"","email":"","tel":""}],
-  "bilanci": [{"anno":2024,"prev":0,"cons":0,"fondo":0},{"anno":2023,"prev":0,"cons":0,"fondo":0},{"anno":2022,"prev":0,"cons":0,"fondo":0},{"anno":2021,"prev":0,"cons":0,"fondo":0},{"anno":2020,"prev":0,"cons":0,"fondo":0}],
-  "spese": {"riscaldamento":0,"ascensore":0,"pulizia":0,"assicurazione":0,"amm":0,"illuminazione":0,"manutenzione":0,"acqua":0,"giardinaggio":0,"varie":0},
-  "imp": {"riscaldamento":false,"ascensore":false,"areeVerdi":false,"raffrescamento":false,"citofono":false,"parcheggio":false},
-  "impDet": {
-    "riscaldamento":{"marca":"","anno":"","ultima":"","contratto":"","scad":""},
-    "ascensore":{"marca":"","anno":"","ultima":"","contratto":"","scad":""},
-    "areeVerdi":{"fornitore":"","contratto":"","scad":""},
-    "citofono":{"marca":"","anno":"","ultima":""}
-  },
-  "trovati": 0,
-  "totale": 60,
-  "confidence": {"info":0.0,"unita":0.0,"bilanci":0.0,"spese":0.0,"imp":0.0},
-  "note": ""
-}`;
+// Pagine ripetute fra un blocco e il successivo: una tabella che cade sul
+// confine viene comunque vista intera in uno dei due blocchi, invece di
+// produrre due subtotali parziali spacciati per totali.
+export const PAGINE_SOVRAPPOSTE = 2;
 
-export const EXTRACTION_PROMPT = `Sei un esperto di amministrazione condominiale italiana.
-Analizza questi documenti (bilanci, verbali assemblee, tabelle millesimali, contratti) e
-estrai tutti i dati strutturati disponibili.
-
-Restituisci SOLO JSON valido, senza markdown, senza testo aggiuntivo, con questo schema esatto:
-${EXTRACTION_SCHEMA}
-
-Regole importanti:
-- Usa SOLO dati esplicitamente presenti nei documenti — non inventare mai
-- Per numeri non trovati usa 0, per stringhe usa ""
-- I millesimi devono sommare il più vicino possibile a 1000
-- "trovati" = conteggio campi con valore reale (non 0 e non "")
-- "totale" è sempre 60
-- "confidence" indica la tua certezza per ogni sezione (0.0-1.0)
-- In "note" spiega cosa hai trovato e cosa manca
-- I bilanci devono essere ordinati dal più recente (2024) al più antico (2020)`;
-
-// Aggiunta di un singolo esercizio allo storico già esistente: stesso schema,
-// ma al modello interessa solo l'anno di quel bilancio e le sue voci di spesa.
-export const BILANCIO_PROMPT = `Sei un esperto di amministrazione condominiale italiana.
-Questo documento è il bilancio di UN SINGOLO esercizio (preventivo o consuntivo) di un condominio.
-
-Restituisci SOLO JSON valido, senza markdown, senza testo aggiuntivo, con questo schema esatto:
-${EXTRACTION_SCHEMA}
-
-Regole importanti:
-- Compila SOLO "bilanci" (una sola voce: l'anno di questo bilancio) e "spese" (le voci di
-  spesa di quell'anno). Lascia tutto il resto ai valori vuoti dello schema
-- L'anno è quello dell'esercizio a cui il bilancio si riferisce, non la data di approvazione
-  né quella di stampa del documento
-- "prev" è il preventivo, "cons" il consuntivo, "fondo" il fondo di riserva
-- Riconduci ogni voce di spesa a una delle categorie dello schema; quelle che non rientrano
-  in nessuna categoria vanno sommate in "varie"
-- Usa SOLO dati esplicitamente presenti nel documento — non inventare e non stimare mai
-- Per numeri non trovati usa 0
-- "confidence" indica la tua certezza per ogni sezione (0.0-1.0)
-- In "note" scrivi l'anno riconosciuto e da quale parte del documento l'hai ricavato`;
-
-export type ExtractionMode = "condominio" | "bilancio";
-
-// Ogni documento viene analizzato in una richiesta separata: senza questa nota
-// il modello prova a "completare" lo schema deducendo i campi che vede mancare,
-// e in fase di fusione quei valori inventati sovrascriverebbero quelli reali
-// estratti dagli altri documenti.
-export function extractionPrompt(
-  label: string,
-  index: number,
-  total: number,
-  mode: ExtractionMode = "condominio"
-): string {
-  const base = mode === "bilancio" ? BILANCIO_PROMPT : EXTRACTION_PROMPT;
-  if (total <= 1) return base;
-
-  return `${base}
-
-CONTESTO: stai analizzando solo una parte della documentazione (${label} — blocco ${index} di ${total}).
-Estrai esclusivamente i dati presenti in QUESTO blocco e lascia a 0 / "" tutto il resto: i campi
-mancanti vengono recuperati dagli altri blocchi. Non dedurre, stimare o completare valori assenti qui.`;
-}
+// Scostamento oltre il quale la somma delle voci e il totale del documento
+// non si considerano più la stessa cifra (arrotondamenti dell'amministratore).
+export const TOLLERANZA_QUADRATURA = 1;
 
 const CATEGORIE_SPESA = [
   "riscaldamento",
@@ -125,6 +64,267 @@ const CAMPI_DETTAGLIO = ["marca", "anno", "ultima", "contratto", "scad", "fornit
 
 export const TOTALE_CAMPI = 60;
 
+// Tutti i campi di un bilancio che contengono un importo, nell'ordine in cui
+// vengono mostrati: è la lista su cui girano fusione, controlli e interfaccia.
+export const CAMPI_IMPORTO: CampoImporto[] = [
+  "prev",
+  "cons",
+  "fondo",
+  "totale",
+  ...CATEGORIE_SPESA.map((c) => `spesa.${c}` as CampoImporto),
+];
+
+export const CAMPI_IMPORTO_LABEL: Record<string, string> = {
+  prev: "Preventivo",
+  cons: "Consuntivo",
+  fondo: "Fondo riserva",
+  totale: "Totale del documento",
+};
+
+const IMPORTO_SCHEMA = `{"v": 0, "pag": 0, "txt": ""}`;
+
+const SPESE_SCHEMA = CATEGORIE_SPESA.map((c) => `"${c}": ${IMPORTO_SCHEMA}`).join(", ");
+
+export const EXTRACTION_SCHEMA = `{
+  "info": {"via":"","citta":"","cap":"","annoCostr":"","piani":0,"nApt":0,"pianoTerra":true,"amm":"","emailAmm":"","telAmm":""},
+  "unita": [{"int":1,"piano":"T","mq":0,"ml":0,"nome":"","email":"","tel":""}],
+  "bilanci": [
+    {
+      "anno": 0,
+      "prev": ${IMPORTO_SCHEMA},
+      "cons": ${IMPORTO_SCHEMA},
+      "fondo": ${IMPORTO_SCHEMA},
+      "totale": ${IMPORTO_SCHEMA},
+      "spese": {${SPESE_SCHEMA}}
+    }
+  ],
+  "imp": {"riscaldamento":false,"ascensore":false,"areeVerdi":false,"raffrescamento":false,"citofono":false,"parcheggio":false},
+  "impDet": {
+    "riscaldamento":{"marca":"","anno":"","ultima":"","contratto":"","scad":""},
+    "ascensore":{"marca":"","anno":"","ultima":"","contratto":"","scad":""},
+    "areeVerdi":{"fornitore":"","contratto":"","scad":""},
+    "citofono":{"marca":"","anno":"","ultima":""}
+  },
+  "confidence": {"info":0.0,"unita":0.0,"bilanci":0.0,"spese":0.0,"imp":0.0},
+  "note": ""
+}`;
+
+// Le regole sugli importi sono la parte che decide se i numeri saranno
+// ritrovabili nel documento o no: ogni valore deve portarsi dietro la pagina e
+// la riga da cui viene, e nessun valore può essere dedotto.
+const REGOLE_IMPORTI = `Regole sugli importi:
+- Ogni importo si scrive nella forma ${IMPORTO_SCHEMA}
+- "v" è il numero e basta: punto come separatore decimale, nessun separatore per
+  le migliaia (12345.67, non 12.345,67)
+- "pag" è il numero di pagina di QUESTO blocco: la prima pagina che ricevi è 1
+- "txt" è la riga del documento da cui hai letto il numero, copiata alla lettera
+  con l'etichetta e l'importo come sono stampati
+- Se un importo non è presente nel documento scrivi {"v": 0, "pag": 0, "txt": ""}:
+  non dedurlo, non stimarlo, non calcolarlo, non riportarlo da un altro anno
+- Non scrivere mai un importo che non compaia stampato nel documento. "totale" è
+  il totale complessivo stampato, non la somma che faresti tu
+- Le quote individuali e i riparti millesimali non sono voci di spesa del
+  condominio: servono solo gli importi complessivi
+- Unica eccezione alla regola di non calcolare: le voci che non rientrano in
+  nessuna categoria dello schema vanno sommate in "varie"; in quel caso scrivi in
+  "note" quali voci hai sommato, e lascia "pag" della categoria "varie" alla
+  pagina in cui quelle voci sono elencate`;
+
+const REGOLE_BILANCI = `Regole sui bilanci:
+- "bilanci" contiene una voce per ogni esercizio effettivamente presente nel
+  documento e nessuna in più: se il documento riguarda un solo anno, restituisci
+  una sola voce. Non aggiungere anni per completare una serie
+- "anno" è l'esercizio a cui il bilancio si riferisce, non la data di
+  approvazione né quella di stampa del documento
+- "prev" è il preventivo, "cons" il consuntivo, "fondo" il fondo di riserva
+- Ogni voce di spesa appartiene all'anno del proprio bilancio: non mescolare
+  esercizi diversi nella stessa voce`;
+
+export const EXTRACTION_PROMPT = `Sei un esperto di amministrazione condominiale italiana.
+Analizza questi documenti (bilanci, verbali assemblee, tabelle millesimali, contratti) e
+estrai tutti i dati strutturati disponibili.
+
+Restituisci SOLO JSON valido, senza markdown, senza testo aggiuntivo, con questo schema esatto:
+${EXTRACTION_SCHEMA}
+
+${REGOLE_IMPORTI}
+
+${REGOLE_BILANCI}
+
+Altre regole:
+- Usa SOLO dati esplicitamente presenti nei documenti — non inventare mai
+- Per le stringhe non trovate usa ""
+- I millesimi devono sommare il più vicino possibile a 1000
+- "confidence" indica la tua certezza per ogni sezione (0.0-1.0)
+- In "note" scrivi quali anni hai riconosciuto e da quale parte del documento,
+  che cosa non sei riuscito a leggere e che cosa manca`;
+
+// Aggiunta di un singolo esercizio allo storico già esistente: stesso schema,
+// ma al modello interessa solo l'anno di quel bilancio e le sue voci di spesa.
+export const BILANCIO_PROMPT = `Sei un esperto di amministrazione condominiale italiana.
+Questo documento è il bilancio di UN SINGOLO esercizio (preventivo o consuntivo) di un condominio.
+
+Restituisci SOLO JSON valido, senza markdown, senza testo aggiuntivo, con questo schema esatto:
+${EXTRACTION_SCHEMA}
+
+- Compila SOLO "bilanci", con una sola voce: l'anno di questo bilancio, i suoi
+  importi e le sue voci di spesa. Lascia tutto il resto ai valori vuoti dello schema
+
+${REGOLE_IMPORTI}
+
+${REGOLE_BILANCI}
+
+- "confidence" indica la tua certezza per ogni sezione (0.0-1.0)
+- In "note" scrivi l'anno riconosciuto e da quale parte del documento l'hai ricavato`;
+
+// Primo passaggio sui PDF lunghi: invece di tagliare a pagine fisse, si chiede
+// al modello dove sono le tabelle, così l'estrazione vera riceve la tabella
+// intera invece di due metà.
+export const LOCALIZZA_PROMPT = `Sei un esperto di amministrazione condominiale italiana.
+Questo è un documento condominiale di più pagine. NON estrarre importi.
+
+Indica soltanto in quali pagine si trovano i prospetti di bilancio (preventivo,
+consuntivo, riepilogo delle spese, fondo di riserva).
+
+Restituisci SOLO JSON valido, senza markdown, senza testo aggiuntivo:
+{"sezioni": [{"anno": 0, "da": 1, "a": 1, "cosa": ""}]}
+
+- "da" e "a" sono numeri di pagina di questo blocco: la prima pagina che ricevi è 1
+- Includi la pagina del totale e quelle delle voci di spesa che lo compongono,
+  anche quando la tabella prosegue su più pagine
+- "anno" è l'esercizio del prospetto, 0 se non riesci a leggerlo
+- "cosa" descrive in poche parole il prospetto ("consuntivo 2023", "riparto spese")
+- Se non trovi nessun prospetto restituisci {"sezioni": []}`;
+
+export type ExtractionMode = "condominio" | "bilancio";
+
+// Ogni documento viene analizzato in una richiesta separata: senza questa nota
+// il modello prova a "completare" lo schema deducendo i campi che vede mancare,
+// e in fase di fusione quei valori inventati sovrascriverebbero quelli reali
+// estratti dagli altri documenti.
+export function extractionPrompt(
+  label: string,
+  index: number,
+  total: number,
+  mode: ExtractionMode = "condominio"
+): string {
+  const base = mode === "bilancio" ? BILANCIO_PROMPT : EXTRACTION_PROMPT;
+  if (total <= 1) return base;
+
+  return `${base}
+
+CONTESTO: stai analizzando solo una parte della documentazione (${label} — blocco ${index} di ${total}).
+Estrai esclusivamente i dati presenti in QUESTO blocco e lascia a 0 / "" tutto il resto: i campi
+mancanti vengono recuperati dagli altri blocchi. Non dedurre, stimare o completare valori assenti qui.`;
+}
+
+// -----------------------------------------------------------------------
+// Lettura dei valori grezzi
+// -----------------------------------------------------------------------
+
+function str(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+// Gli importi arrivano come li scrive il modello o come sono stampati nel
+// documento: "12.345,67", "12,345.67", "€ 1.200", "(350,00)" per i negativi.
+// Il separatore decimale si riconosce dall'ultimo separatore presente e da
+// quante cifre lo seguono: nei gruppi delle migliaia sono sempre tre, quindi
+// "48.500" vale 48500 e non 48,5.
+export function num(value: unknown): number {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (typeof value !== "string") return 0;
+
+  const raw = value.trim();
+  if (!raw) return 0;
+
+  const negativo = /^\(.*\)$/.test(raw) || /^[-−–]/.test(raw);
+  const cifre = raw.replace(/[^\d.,]/g, "");
+  if (!/\d/.test(cifre)) return 0;
+
+  const separatore = Math.max(cifre.lastIndexOf(","), cifre.lastIndexOf("."));
+  let intero = cifre;
+  let decimali = "";
+
+  if (separatore !== -1) {
+    const coda = cifre.slice(separatore + 1);
+    // Una coda di una o due cifre è la parte decimale; tre cifre sono un
+    // gruppo di migliaia, che va tenuto nella parte intera.
+    if (/^\d{1,2}$/.test(coda)) {
+      intero = cifre.slice(0, separatore);
+      decimali = coda;
+    }
+  }
+
+  const soloCifre = intero.replace(/\D/g, "");
+  const parsed = Number(`${soloCifre || "0"}.${decimali || "0"}`);
+  if (!Number.isFinite(parsed)) return 0;
+
+  return negativo ? -parsed : parsed;
+}
+
+function confidence(value: unknown): number {
+  return Math.min(1, Math.max(0, num(value)));
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+function eur(value: number): string {
+  return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(value);
+}
+
+// -----------------------------------------------------------------------
+// Citazioni: la verifica che il numero esista davvero nel documento
+// -----------------------------------------------------------------------
+
+// Un passaggio che l'API ha estratto dal PDF. A differenza del resto della
+// risposta non è scritto dal modello, quindi non può essere inventato.
+export interface Citazione {
+  pagina: number;
+  testo: string;
+}
+
+export interface ContestoEstrazione {
+  // Nome del file da cui viene questo blocco.
+  documento: string;
+  // Pagine che precedono il blocco nel documento intero: il modello numera le
+  // pagine a partire da quelle che riceve, non da quelle del PDF originale.
+  offsetPagina: number;
+  citazioni: Citazione[];
+}
+
+function soleCifre(testo: string): string {
+  return testo.replace(/[^\d]/g, "");
+}
+
+// Le cifre dell'importo come comparirebbero stampate, separatori esclusi:
+// 12345.67 -> "1234567", 12345 -> "12345".
+function cifreImporto(valore: number): string {
+  const assoluto = Math.abs(valore);
+  const arrotondato = Math.round(assoluto * 100) / 100;
+  const testo = Number.isInteger(arrotondato)
+    ? String(arrotondato)
+    : arrotondato.toFixed(2);
+  return soleCifre(testo);
+}
+
+function verificaFonte(fonte: Fonte, valore: number, citazioni: Citazione[]): boolean {
+  if (!citazioni.length || !valore) return false;
+  const cifre = cifreImporto(valore);
+  if (cifre.length < 2) return false;
+
+  return citazioni.some((c) => {
+    if (fonte.pagina && c.pagina && c.pagina !== fonte.pagina) return false;
+    return soleCifre(c.testo).includes(cifre);
+  });
+}
+
+// -----------------------------------------------------------------------
+// Normalizzazione
+// -----------------------------------------------------------------------
+
 function mapSpese(valore: (categoria: (typeof CATEGORIE_SPESA)[number]) => number): ExtractedSpese {
   return {
     riscaldamento: valore("riscaldamento"),
@@ -153,37 +353,83 @@ function mapImpianti(
   };
 }
 
-// Ripulisce l'output testuale del modello (fence markdown, prosa residua) e
-// lo fa combaciare con il JSON dello schema di estrazione.
-export function parseExtractionOutput(text: string): unknown {
-  let clean = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
-  const firstBrace = clean.indexOf("{");
-  const lastBrace = clean.lastIndexOf("}");
-  if (firstBrace !== -1 && lastBrace !== -1) {
-    clean = clean.slice(firstBrace, lastBrace + 1);
+export function leggiImporto(bilancio: ExtractedBilancio, campo: CampoImporto): number {
+  if (campo.startsWith("spesa.")) {
+    return bilancio.spese[campo.slice(6) as keyof ExtractedSpese] ?? 0;
   }
-  return JSON.parse(clean);
+  return (bilancio[campo as "prev" | "cons" | "fondo" | "totale"] as number) ?? 0;
 }
 
-function str(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function num(value: unknown): number {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string") {
-    const parsed = Number(value.replace(/[^\d.,-]/g, "").replace(",", "."));
-    return Number.isFinite(parsed) ? parsed : 0;
+export function scriviImporto(
+  bilancio: ExtractedBilancio,
+  campo: CampoImporto,
+  valore: number
+): void {
+  if (campo.startsWith("spesa.")) {
+    bilancio.spese[campo.slice(6) as keyof ExtractedSpese] = valore;
+    return;
   }
-  return 0;
+  bilancio[campo as "prev" | "cons" | "fondo" | "totale"] = valore;
 }
 
-function confidence(value: unknown): number {
-  return Math.min(1, Math.max(0, num(value)));
+export function etichettaCampo(campo: CampoImporto): string {
+  if (campo.startsWith("spesa.")) return CAMPI_IMPORTO_LABEL[campo.slice(6)] ?? campo.slice(6);
+  return CAMPI_IMPORTO_LABEL[campo] ?? campo;
 }
 
-function record(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+// Un importo dello schema: {"v": …, "pag": …, "txt": …}. Se il modello scrive
+// il numero nudo la fonte manca, e l'importo resta segnalabile come tale.
+function importoConFonte(
+  raw: unknown,
+  ctx: ContestoEstrazione
+): { valore: number; fonte: Fonte | null } {
+  if (typeof raw === "number" || typeof raw === "string") {
+    return { valore: num(raw), fonte: null };
+  }
+
+  const r = record(raw);
+  const valore = num(r.v);
+  if (!valore) return { valore: 0, fonte: null };
+
+  const paginaBlocco = Math.max(0, Math.round(num(r.pag)));
+  const fonte: Fonte = {
+    documento: ctx.documento,
+    pagina: paginaBlocco ? paginaBlocco + ctx.offsetPagina : 0,
+    testo: str(r.txt),
+    verificata: false,
+  };
+  fonte.verificata = verificaFonte(fonte, valore, ctx.citazioni);
+
+  return { valore, fonte };
+}
+
+export function bilancioVuoto(anno = 0): ExtractedBilancio {
+  return {
+    anno,
+    prev: 0,
+    cons: 0,
+    fondo: 0,
+    spese: mapSpese(() => 0),
+    totale: 0,
+    fonti: {},
+    conflitti: {},
+  };
+}
+
+function normalizzaBilancio(raw: unknown, ctx: ContestoEstrazione): ExtractedBilancio {
+  const r = record(raw);
+  const bilancio = bilancioVuoto(Math.round(num(r.anno)));
+  const spese = record(r.spese);
+
+  for (const campo of CAMPI_IMPORTO) {
+    const grezzo = campo.startsWith("spesa.") ? spese[campo.slice(6)] : r[campo];
+    const { valore, fonte } = importoConFonte(grezzo, ctx);
+    if (!valore) continue;
+    scriviImporto(bilancio, campo, valore);
+    if (fonte) bilancio.fonti[campo] = fonte;
+  }
+
+  return bilancio;
 }
 
 export function emptyExtraction(): ExtractionResult {
@@ -202,9 +448,9 @@ export function emptyExtraction(): ExtractionResult {
     },
     unita: [],
     bilanci: [],
-    spese: mapSpese(() => 0),
     imp: mapImpianti(() => false),
     impDet: {},
+    documenti: [],
     trovati: 0,
     totale: TOTALE_CAMPI,
     confidence: { info: 0, unita: 0, bilanci: 0, spese: 0, imp: 0 },
@@ -212,13 +458,24 @@ export function emptyExtraction(): ExtractionResult {
   };
 }
 
+// Ripulisce l'output testuale del modello (fence markdown, prosa residua) e
+// lo fa combaciare con il JSON dello schema di estrazione.
+export function parseExtractionOutput(text: string): unknown {
+  let clean = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+  const firstBrace = clean.indexOf("{");
+  const lastBrace = clean.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace !== -1) {
+    clean = clean.slice(firstBrace, lastBrace + 1);
+  }
+  return JSON.parse(clean);
+}
+
 // L'output del modello è JSON libero: qualsiasi campo può mancare o avere il
 // tipo sbagliato. Normalizzare qui evita che un singolo campo malformato faccia
 // esplodere la fusione o il wizard.
-export function normalizeExtraction(raw: unknown): ExtractionResult {
+export function normalizeExtraction(raw: unknown, ctx: ContestoEstrazione): ExtractionResult {
   const r = record(raw);
   const info = record(r.info);
-  const spese = record(r.spese);
   const imp = record(r.imp);
   const conf = record(r.confidence);
 
@@ -250,19 +507,13 @@ export function normalizeExtraction(raw: unknown): ExtractionResult {
       })
       .filter((u) => u.int > 0),
     bilanci: (Array.isArray(r.bilanci) ? r.bilanci : [])
-      .map((b) => {
-        const item = record(b);
-        return {
-          anno: num(item.anno),
-          prev: num(item.prev),
-          cons: num(item.cons),
-          fondo: num(item.fondo),
-        };
-      })
-      .filter((b) => b.anno > 0),
-    spese: mapSpese((c) => num(spese[c])),
+      .map((b) => normalizzaBilancio(b, ctx))
+      // Una voce senza anno e senza un solo importo è lo schema restituito
+      // vuoto: tenerla produrrebbe una riga fantasma nello storico.
+      .filter((b) => b.anno > 0 || CAMPI_IMPORTO.some((c) => leggiImporto(b, c))),
     imp: mapImpianti((t) => imp[t] === true),
     impDet: normalizeImpDet(r.impDet),
+    documenti: [],
     trovati: 0,
     totale: TOTALE_CAMPI,
     confidence: {
@@ -296,6 +547,10 @@ function normalizeImpDet(raw: unknown): ExtractedImpiantiDettagli {
   return out;
 }
 
+// -----------------------------------------------------------------------
+// Fusione
+// -----------------------------------------------------------------------
+
 function pickStr(a: string, b: string, preferB: boolean): string {
   if (!a) return b;
   if (!b) return a;
@@ -310,7 +565,8 @@ function pickNum(a: number, b: number, preferB: boolean): number {
 
 // Ogni documento produce un'estrazione parziale: la fusione tiene il valore
 // valorizzato e, quando entrambi lo sono, quello del documento che dichiara
-// più confidenza sulla sezione.
+// più confidenza sulla sezione. Vale per l'anagrafica; sugli importi la
+// confidenza dichiarata dal modello non basta e si usa `fondiCampo`.
 export function mergeExtractions(results: ExtractionResult[]): ExtractionResult {
   if (!results.length) return emptyExtraction();
 
@@ -324,12 +580,10 @@ function mergePair(a: ExtractionResult, b: ExtractionResult): ExtractionResult {
   return {
     info: mergeInfo(a.info, b.info, b.confidence.info > a.confidence.info),
     unita: mergeUnita(a.unita, b.unita, b.confidence.unita > a.confidence.unita),
-    bilanci: mergeBilanci(a.bilanci, b.bilanci, b.confidence.bilanci > a.confidence.bilanci),
-    spese: mapSpese((c) =>
-      pickNum(a.spese[c], b.spese[c], b.confidence.spese > a.confidence.spese)
-    ),
+    bilanci: mergeBilanci(a.bilanci, b.bilanci),
     imp: mapImpianti((t) => a.imp[t] || b.imp[t]),
     impDet: mergeImpDet(a.impDet, b.impDet),
+    documenti: a.documenti.length ? a.documenti : b.documenti,
     trovati: 0,
     totale: TOTALE_CAMPI,
     confidence: {
@@ -386,26 +640,84 @@ function mergeUnita(
   return Array.from(byInterno.values()).sort((x, y) => x.int - y.int);
 }
 
-function mergeBilanci(
-  a: ExtractedBilancio[],
-  b: ExtractedBilancio[],
-  preferB: boolean
-): ExtractedBilancio[] {
+function stessoImporto(a: number, b: number): boolean {
+  return Math.abs(a - b) < 0.005;
+}
+
+// Quando due documenti (o due blocchi dello stesso documento) danno importi
+// diversi per lo stesso campo, il valore scartato non sparisce: viene messo in
+// `conflitti` e mostrato all'amministratore, perché è esattamente il caso in
+// cui uno dei due numeri è sbagliato e nessuno se ne accorgerebbe.
+function fondiCampo(
+  dest: ExtractedBilancio,
+  src: ExtractedBilancio,
+  campo: CampoImporto
+): void {
+  const valoreSrc = leggiImporto(src, campo);
+  if (!valoreSrc) return;
+
+  const valoreDest = leggiImporto(dest, campo);
+  const fonteDest = dest.fonti[campo];
+  const fonteSrc = src.fonti[campo];
+
+  if (!valoreDest) {
+    scriviImporto(dest, campo, valoreSrc);
+    if (fonteSrc) dest.fonti[campo] = fonteSrc;
+    return;
+  }
+
+  if (stessoImporto(valoreDest, valoreSrc)) {
+    // Stesso numero letto due volte: si tiene la fonte migliore delle due.
+    if (fonteSrc?.verificata && !fonteDest?.verificata) dest.fonti[campo] = fonteSrc;
+    else if (!fonteDest && fonteSrc) dest.fonti[campo] = fonteSrc;
+    return;
+  }
+
+  // Valori diversi: vince quello verificato da una citazione, poi quello che
+  // almeno indica la pagina. A parità si tiene il primo, in modo che il
+  // risultato non dipenda dall'ordine in cui arrivano i blocchi.
+  const punteggio = (f?: Fonte) => (f?.verificata ? 2 : f?.pagina ? 1 : 0);
+  const vinceSrc = punteggio(fonteSrc) > punteggio(fonteDest);
+
+  const scartato: ValoreScartato = vinceSrc
+    ? { valore: valoreDest, fonte: fonteDest ?? null }
+    : { valore: valoreSrc, fonte: fonteSrc ?? null };
+
+  if (vinceSrc) {
+    scriviImporto(dest, campo, valoreSrc);
+    if (fonteSrc) dest.fonti[campo] = fonteSrc;
+  }
+
+  const conflitti = dest.conflitti[campo] ?? [];
+  if (!conflitti.some((c) => stessoImporto(c.valore, scartato.valore))) {
+    conflitti.push(scartato);
+  }
+  dest.conflitti[campo] = conflitti;
+}
+
+function mergeBilanci(a: ExtractedBilancio[], b: ExtractedBilancio[]): ExtractedBilancio[] {
   const byAnno = new Map<number, ExtractedBilancio>();
 
   for (const bilancio of a) byAnno.set(bilancio.anno, bilancio);
+
   for (const bilancio of b) {
     const existing = byAnno.get(bilancio.anno);
     if (!existing) {
       byAnno.set(bilancio.anno, bilancio);
       continue;
     }
-    byAnno.set(bilancio.anno, {
-      anno: bilancio.anno,
-      prev: pickNum(existing.prev, bilancio.prev, preferB),
-      cons: pickNum(existing.cons, bilancio.cons, preferB),
-      fondo: pickNum(existing.fondo, bilancio.fondo, preferB),
-    });
+
+    for (const campo of CAMPI_IMPORTO) fondiCampo(existing, bilancio, campo);
+
+    for (const campo of CAMPI_IMPORTO) {
+      const altri = bilancio.conflitti[campo];
+      if (!altri?.length) continue;
+      const conflitti = existing.conflitti[campo] ?? [];
+      for (const c of altri) {
+        if (!conflitti.some((x) => stessoImporto(x.valore, c.valore))) conflitti.push(c);
+      }
+      existing.conflitti[campo] = conflitti;
+    }
   }
 
   return Array.from(byAnno.values()).sort((x, y) => y.anno - x.anno);
@@ -429,6 +741,97 @@ function mergeImpDet(
   return out;
 }
 
+// -----------------------------------------------------------------------
+// Controlli
+// -----------------------------------------------------------------------
+
+export function sommaSpese(spese: ExtractedSpese): number {
+  return CATEGORIE_SPESA.reduce((somma, c) => somma + (spese[c] || 0), 0);
+}
+
+// I controlli che il modello non può fare su se stesso: sono aritmetica e
+// confronti fra documenti, e girano sul risultato finale invece che dentro la
+// richiesta. Sono la rete che prende gli errori di lettura rimasti.
+export function controlliBilancio(bilancio: ExtractedBilancio): Controllo[] {
+  const controlli: Controllo[] = [];
+  const annoMax = new Date().getFullYear() + 1;
+
+  if (!bilancio.anno) {
+    controlli.push({
+      campo: "",
+      livello: "errore",
+      messaggio: "L'anno dell'esercizio non è stato riconosciuto: indicalo prima di salvare.",
+    });
+  } else if (bilancio.anno < 1900 || bilancio.anno > annoMax) {
+    controlli.push({
+      campo: "",
+      livello: "errore",
+      messaggio: `L'anno ${bilancio.anno} non è plausibile per un esercizio condominiale.`,
+    });
+  }
+
+  const somma = sommaSpese(bilancio.spese);
+
+  if (somma && bilancio.totale && Math.abs(somma - bilancio.totale) > TOLLERANZA_QUADRATURA) {
+    controlli.push({
+      campo: "totale",
+      livello: "errore",
+      messaggio:
+        `Le voci di spesa sommano ${eur(somma)}, ma il totale stampato nel documento è ` +
+        `${eur(bilancio.totale)}: mancano ${eur(Math.abs(somma - bilancio.totale))}.`,
+    });
+  } else if (
+    somma &&
+    !bilancio.totale &&
+    bilancio.cons &&
+    Math.abs(somma - bilancio.cons) > TOLLERANZA_QUADRATURA
+  ) {
+    controlli.push({
+      campo: "cons",
+      livello: "avviso",
+      messaggio:
+        `Le voci di spesa sommano ${eur(somma)}, il consuntivo è ${eur(bilancio.cons)}: ` +
+        `differenza di ${eur(Math.abs(somma - bilancio.cons))}.`,
+    });
+  }
+
+  for (const campo of CAMPI_IMPORTO) {
+    const scartati = bilancio.conflitti[campo];
+    if (!scartati?.length) continue;
+    const valori = [leggiImporto(bilancio, campo), ...scartati.map((s) => s.valore)]
+      .map(eur)
+      .join(" / ");
+    controlli.push({
+      campo,
+      livello: "avviso",
+      messaggio: `Letture discordanti per «${etichettaCampo(campo)}»: ${valori}. Scegli tu quella giusta.`,
+    });
+  }
+
+  const senzaPagina = CAMPI_IMPORTO.filter(
+    (campo) => leggiImporto(bilancio, campo) && !bilancio.fonti[campo]?.pagina
+  );
+  if (senzaPagina.length) {
+    controlli.push({
+      campo: "",
+      livello: "avviso",
+      messaggio:
+        `Per ${senzaPagina.length} importi non è indicata la pagina di origine ` +
+        `(${senzaPagina.map(etichettaCampo).join(", ")}): verificali sul documento.`,
+    });
+  }
+
+  return controlli;
+}
+
+export function haErrori(controlli: Controllo[]): boolean {
+  return controlli.some((c) => c.livello === "errore");
+}
+
+// -----------------------------------------------------------------------
+// Conteggio campi
+// -----------------------------------------------------------------------
+
 // I 60 campi dello schema: 9 di anagrafica, 10 unità, 15 valori di bilancio,
 // 10 voci di spesa, 6 impianti, 10 dettagli impianto.
 function contaCampiTrovati(r: ExtractionResult): number {
@@ -441,7 +844,10 @@ function contaCampiTrovati(r: ExtractionResult): number {
     r.bilanci.reduce((acc, b) => acc + (b.prev ? 1 : 0) + (b.cons ? 1 : 0) + (b.fondo ? 1 : 0), 0),
     15
   );
-  trovati += CATEGORIE_SPESA.filter((c) => r.spese[c]).length;
+  trovati += Math.min(
+    r.bilanci.reduce((acc, b) => acc + CATEGORIE_SPESA.filter((c) => b.spese[c]).length, 0),
+    10
+  );
   trovati += TIPI_IMPIANTO.filter((t) => r.imp[t]).length;
   trovati += Math.min(
     IMPIANTI_CON_DETTAGLI.reduce((acc, tipo) => acc + Object.keys(r.impDet[tipo] ?? {}).length, 0),
