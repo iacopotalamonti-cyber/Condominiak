@@ -9,7 +9,7 @@
 -- restano valide e si presentano semplicemente come prive di provenienza.
 
 alter table public.bilanci
-  add column if not exists totale_documento numeric(12, 2),
+  add column if not exists totale_documento numeric,
   add column if not exists fonti jsonb,
   add column if not exists documento_path text;
 
