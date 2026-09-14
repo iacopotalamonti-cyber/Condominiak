@@ -221,8 +221,11 @@ export interface ExtractionResult {
   note: string;
 }
 
+// Il file viene caricato dal browser direttamente su Supabase Storage
+// (bypassando il limite di payload delle funzioni serverless): qui passa
+// solo il percorso, non i byte.
 export interface UploadedFile {
   name: string;
   type: string;
-  base64: string;
+  path: string;
 }

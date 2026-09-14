@@ -1,25 +1,15 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { FileText, Image as ImageIcon, Upload, X } from "lucide-react";
+import { FileText, Image as ImageIcon, Loader2, Upload, X } from "lucide-react";
 
+import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { UploadedFile } from "@/lib/types";
 
 const ACCEPTED = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      resolve(result.split(",")[1] ?? "");
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
+const BUCKET = "documenti-condominiali";
 
 interface UploadStepProps {
   onAnalyze: (files: UploadedFile[]) => void;
@@ -29,19 +19,44 @@ interface UploadStepProps {
 export function UploadStep({ onAnalyze, onSkip }: UploadStepProps) {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [dragActive, setDragActive] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const addFiles = useCallback(async (fileList: FileList) => {
     const accepted = Array.from(fileList).filter((f) => ACCEPTED.includes(f.type));
-    const converted = await Promise.all(
-      accepted.map(async (f) => ({
-        name: f.name,
-        type: f.type,
-        base64: await fileToBase64(f),
-      }))
-    );
-    setFiles((prev) => [...prev, ...converted]);
+    if (!accepted.length) return;
+
+    setUploading(true);
+    setError(null);
+    try {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("Sessione scaduta, ricarica la pagina");
+
+      const uploaded: UploadedFile[] = [];
+      for (const file of accepted) {
+        const path = `pending/${user.id}/${crypto.randomUUID()}-${file.name}`;
+        const { error: uploadErr } = await supabase.storage.from(BUCKET).upload(path, file);
+        if (uploadErr) throw uploadErr;
+        uploaded.push({ name: file.name, type: file.type, path });
+      }
+      setFiles((prev) => [...prev, ...uploaded]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Caricamento fallito");
+    } finally {
+      setUploading(false);
+    }
   }, []);
+
+  async function removeFile(index: number) {
+    const file = files[index];
+    setFiles((prev) => prev.filter((_, i) => i !== index));
+    const supabase = createClient();
+    await supabase.storage.from(BUCKET).remove([file.path]);
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -52,6 +67,10 @@ export function UploadStep({ onAnalyze, onSkip }: UploadStepProps) {
           automaticamente tutti i dati disponibili.
         </p>
       </div>
+
+      {error && (
+        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
+      )}
 
       <Card
         onDragOver={(e) => {
@@ -69,16 +88,26 @@ export function UploadStep({ onAnalyze, onSkip }: UploadStepProps) {
         }`}
       >
         <CardContent className="flex flex-col items-center gap-3 py-12">
-          <Upload className="size-8 text-muted-foreground" />
+          {uploading ? (
+            <Loader2 className="size-8 animate-spin text-muted-foreground" />
+          ) : (
+            <Upload className="size-8 text-muted-foreground" />
+          )}
           <p className="text-sm text-muted-foreground">
-            Trascina qui i file oppure{" "}
-            <button
-              type="button"
-              className="font-medium text-primary underline underline-offset-2"
-              onClick={() => inputRef.current?.click()}
-            >
-              sfoglia
-            </button>
+            {uploading ? (
+              "Caricamento in corso…"
+            ) : (
+              <>
+                Trascina qui i file oppure{" "}
+                <button
+                  type="button"
+                  className="font-medium text-primary underline underline-offset-2"
+                  onClick={() => inputRef.current?.click()}
+                >
+                  sfoglia
+                </button>
+              </>
+            )}
           </p>
           <p className="text-xs text-muted-foreground">PDF, JPG, PNG, WEBP — max 50MB</p>
           <input
@@ -96,7 +125,7 @@ export function UploadStep({ onAnalyze, onSkip }: UploadStepProps) {
         <div className="flex flex-col gap-2">
           {files.map((f, i) => (
             <div
-              key={`${f.name}-${i}`}
+              key={`${f.path}-${i}`}
               className="flex items-center gap-3 rounded-md border px-3 py-2 text-sm"
             >
               {f.type === "application/pdf" ? (
@@ -107,7 +136,7 @@ export function UploadStep({ onAnalyze, onSkip }: UploadStepProps) {
               <span className="flex-1 truncate">{f.name}</span>
               <button
                 type="button"
-                onClick={() => setFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                onClick={() => removeFile(i)}
                 className="text-muted-foreground hover:text-foreground"
               >
                 <X className="size-4" />
@@ -121,7 +150,7 @@ export function UploadStep({ onAnalyze, onSkip }: UploadStepProps) {
         <Button variant="ghost" onClick={onSkip}>
           Salta e inserisci i dati manualmente
         </Button>
-        <Button disabled={files.length === 0} onClick={() => onAnalyze(files)}>
+        <Button disabled={files.length === 0 || uploading} onClick={() => onAnalyze(files)}>
           Analizza con AI ({files.length})
         </Button>
       </div>

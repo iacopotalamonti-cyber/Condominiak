@@ -1,5 +1,6 @@
 import type { Context } from "@netlify/functions";
 import { getStore } from "@netlify/blobs";
+import { createClient } from "@supabase/supabase-js";
 import type Anthropic from "@anthropic-ai/sdk";
 
 import {
@@ -11,32 +12,49 @@ import {
 } from "../../src/lib/anthropic";
 import type { UploadedFile } from "../../src/lib/types";
 
+const BUCKET = "documenti-condominiali";
+
+function mediaTypeForImage(type: string): "image/jpeg" | "image/png" | "image/webp" {
+  return type as "image/jpeg" | "image/png" | "image/webp";
+}
+
 // Documenti reali multi-pagina possono richiedere 40-90+ secondi con Claude,
 // ben oltre il limite delle funzioni serverless sincrone (10-26s). Le
 // Background Function di Netlify hanno 15 minuti a disposizione: qui gira
-// la chiamata vera e propria, il risultato finisce su Netlify Blobs dove
-// /api/extract-status lo va a leggere via polling.
+// la chiamata vera e propria. I file arrivano come percorsi Supabase Storage
+// (non come byte, per non sbattere contro il limite di payload di una
+// funzione sincrona) e vengono scaricati qui con la service role key. Il
+// risultato finisce su Netlify Blobs, dove /api/extract-status lo legge
+// via polling.
 export default async (req: Request, context: Context) => {
   const { jobId, files } = (await req.json()) as { jobId: string; files: UploadedFile[] };
   const store = getStore("extractions");
+
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  );
 
   try {
     const content: Anthropic.MessageParam["content"] = [];
 
     for (const file of files) {
+      const { data, error } = await supabase.storage.from(BUCKET).download(file.path);
+      if (error || !data) {
+        throw new Error(`Download fallito per ${file.name}: ${error?.message ?? "sconosciuto"}`);
+      }
+      const base64 = Buffer.from(await data.arrayBuffer()).toString("base64");
+
       if (file.type === "application/pdf") {
         content.push({
           type: "document",
-          source: { type: "base64", media_type: "application/pdf", data: file.base64 },
+          source: { type: "base64", media_type: "application/pdf", data: base64 },
         });
       } else if (file.type.startsWith("image/")) {
         content.push({
           type: "image",
-          source: {
-            type: "base64",
-            media_type: file.type as "image/jpeg" | "image/png" | "image/webp",
-            data: file.base64,
-          },
+          source: { type: "base64", media_type: mediaTypeForImage(file.type), data: base64 },
         });
       }
     }
@@ -57,6 +75,9 @@ export default async (req: Request, context: Context) => {
 
     const extracted = parseExtractionOutput(text);
     await store.setJSON(jobId, { status: "done", data: extracted });
+
+    // Pulizia: i file temporanei non servono più una volta estratti.
+    await supabase.storage.from(BUCKET).remove(files.map((f) => f.path));
   } catch (error) {
     console.error("Background extraction error:", error);
     const message = error instanceof Error ? error.message : String(error);
