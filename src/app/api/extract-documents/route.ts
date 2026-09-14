@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
     const message = await anthropic.messages.create({
       model: EXTRACTION_MODEL,
       max_tokens: EXTRACTION_MAX_TOKENS,
+      temperature: 0,
       messages: [{ role: "user", content }],
     });
 

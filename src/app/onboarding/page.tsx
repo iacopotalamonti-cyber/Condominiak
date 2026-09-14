@@ -99,11 +99,14 @@ export default function OnboardingPage() {
   async function handleAnalyze(files: UploadedFile[]) {
     setStep("analyzing");
     setExtractionError(null);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 100_000);
     try {
       const res = await fetch("/api/extract-documents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ files }),
+        signal: controller.signal,
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error || "Estrazione fallita");
@@ -119,8 +122,16 @@ export default function OnboardingPage() {
       setAiFilled(true);
       setStep("results");
     } catch (err) {
-      setExtractionError(err instanceof Error ? err.message : "Errore sconosciuto");
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setExtractionError(
+          "L'analisi ha impiegato troppo tempo (oltre 100 secondi) e si è interrotta. Riprova con un documento più piccolo o con meno pagine."
+        );
+      } else {
+        setExtractionError(err instanceof Error ? err.message : "Errore sconosciuto");
+      }
       setStep("upload");
+    } finally {
+      clearTimeout(timeout);
     }
   }
 
