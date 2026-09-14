@@ -40,3 +40,15 @@ Regole importanti:
 - "confidence" indica la tua certezza per ogni sezione (0.0-1.0)
 - In "note" spiega cosa hai trovato e cosa manca
 - I bilanci devono essere ordinati dal più recente (2024) al più antico (2020)`;
+
+// Ripulisce l'output testuale del modello (fence markdown, prosa residua) e
+// lo fa combaciare con il JSON dello schema di estrazione.
+export function parseExtractionOutput(text: string): unknown {
+  let clean = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+  const firstBrace = clean.indexOf("{");
+  const lastBrace = clean.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace !== -1) {
+    clean = clean.slice(firstBrace, lastBrace + 1);
+  }
+  return JSON.parse(clean);
+}

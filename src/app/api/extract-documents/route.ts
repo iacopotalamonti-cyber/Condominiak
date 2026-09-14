@@ -4,8 +4,10 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { anthropic, EXTRACTION_MODEL, EXTRACTION_MAX_TOKENS, EXTRACTION_PROMPT } from "@/lib/anthropic";
 import type { UploadedFile } from "@/lib/types";
 
-export const maxDuration = 120;
-
+// Documenti reali multi-pagina possono richiedere 30-60+ secondi di elaborazione,
+// oltre il limite delle funzioni serverless sincrone. Usiamo la Batch API di
+// Anthropic (asincrona) per non dipendere dal timeout della funzione: questa
+// route crea il batch e ritorna subito l'id, /api/extract-status lo interroga.
 export async function POST(req: NextRequest) {
   try {
     const { files } = (await req.json()) as { files: UploadedFile[] };
@@ -39,39 +41,23 @@ export async function POST(req: NextRequest) {
 
     content.push({ type: "text", text: EXTRACTION_PROMPT });
 
-    const message = await anthropic.messages.create({
-      model: EXTRACTION_MODEL,
-      max_tokens: EXTRACTION_MAX_TOKENS,
-      temperature: 0,
-      messages: [{ role: "user", content }],
+    const batch = await anthropic.messages.batches.create({
+      requests: [
+        {
+          custom_id: "extraction",
+          params: {
+            model: EXTRACTION_MODEL,
+            max_tokens: EXTRACTION_MAX_TOKENS,
+            temperature: 0,
+            messages: [{ role: "user", content }],
+          },
+        },
+      ],
     });
 
-    const text = message.content
-      .filter((b) => b.type === "text")
-      .map((b) => (b as Anthropic.TextBlock).text)
-      .join("");
-
-    let clean = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
-    const firstBrace = clean.indexOf("{");
-    const lastBrace = clean.lastIndexOf("}");
-    if (firstBrace !== -1 && lastBrace !== -1) {
-      clean = clean.slice(firstBrace, lastBrace + 1);
-    }
-
-    let extracted;
-    try {
-      extracted = JSON.parse(clean);
-    } catch {
-      console.error("JSON parse failed. Raw model output:", text);
-      return NextResponse.json(
-        { success: false, error: "La risposta AI non era in formato JSON valido", raw: text.slice(0, 2000) },
-        { status: 502 }
-      );
-    }
-
-    return NextResponse.json({ success: true, data: extracted });
+    return NextResponse.json({ success: true, batchId: batch.id });
   } catch (error) {
-    console.error("Extraction error:", error);
+    console.error("Extraction batch creation error:", error);
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }

@@ -83,6 +83,7 @@ export default function OnboardingPage() {
   const [aiFilled, setAiFilled] = useState(false);
   const [extractionResult, setExtractionResult] = useState<ExtractionResult | null>(null);
   const [extractionError, setExtractionError] = useState<string | null>(null);
+  const [analyzingStatus, setAnalyzingStatus] = useState("Invio documenti…");
 
   const [info, setInfo] = useState<ExtractedInfo>(EMPTY_INFO);
   const [unita, setUnita] = useState<ExtractedUnita[]>([]);
@@ -99,19 +100,41 @@ export default function OnboardingPage() {
   async function handleAnalyze(files: UploadedFile[]) {
     setStep("analyzing");
     setExtractionError(null);
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 100_000);
+    setAnalyzingStatus("Invio documenti…");
     try {
-      const res = await fetch("/api/extract-documents", {
+      const createRes = await fetch("/api/extract-documents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ files }),
-        signal: controller.signal,
       });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error || "Estrazione fallita");
+      const createJson = await createRes.json();
+      if (!createJson.success) throw new Error(createJson.error || "Invio fallito");
 
-      const result = json.data as ExtractionResult;
+      const batchId = createJson.batchId as string;
+      const deadline = Date.now() + 10 * 60_000; // max 10 minuti di attesa
+
+      let result: ExtractionResult | null = null;
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 4000));
+
+        const statusRes = await fetch(`/api/extract-status?batchId=${encodeURIComponent(batchId)}`);
+        const statusJson = await statusRes.json();
+
+        if (!statusJson.success) throw new Error(statusJson.error || "Estrazione fallita");
+
+        if (statusJson.done) {
+          result = statusJson.data as ExtractionResult;
+          break;
+        }
+
+        const counts = statusJson.counts;
+        setAnalyzingStatus(
+          counts?.processing > 0 ? "Analisi documenti in corso…" : "In coda, attendere…"
+        );
+      }
+
+      if (!result) throw new Error("Tempo massimo di attesa superato, riprova");
+
       setExtractionResult(result);
       setInfo({ ...EMPTY_INFO, ...result.info });
       setUnita(result.unita?.length ? result.unita : []);
@@ -122,16 +145,8 @@ export default function OnboardingPage() {
       setAiFilled(true);
       setStep("results");
     } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") {
-        setExtractionError(
-          "L'analisi ha impiegato troppo tempo (oltre 100 secondi) e si è interrotta. Riprova con un documento più piccolo o con meno pagine."
-        );
-      } else {
-        setExtractionError(err instanceof Error ? err.message : "Errore sconosciuto");
-      }
+      setExtractionError(err instanceof Error ? err.message : "Errore sconosciuto");
       setStep("upload");
-    } finally {
-      clearTimeout(timeout);
     }
   }
 
@@ -201,7 +216,7 @@ export default function OnboardingPage() {
             )}
 
             {step === "upload" && <UploadStep onAnalyze={handleAnalyze} onSkip={handleSkipUpload} />}
-            {step === "analyzing" && <AnalyzingStep />}
+            {step === "analyzing" && <AnalyzingStep statusText={analyzingStatus} />}
             {step === "results" && extractionResult && (
               <ResultsStep
                 result={extractionResult}
