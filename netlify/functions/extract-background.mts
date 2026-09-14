@@ -3,6 +3,7 @@ import { getStore } from "@netlify/blobs";
 import { createClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
 
+import "../../src/lib/websocket-polyfill";
 import { EXTRACTION_MODEL, EXTRACTION_MAX_TOKENS, EXTRACTION_PROMPT, parseExtractionOutput } from "../../src/lib/anthropic";
 import type { UploadedFile } from "../../src/lib/types";
 
