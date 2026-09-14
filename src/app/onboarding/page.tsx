@@ -77,6 +77,27 @@ const EMPTY_IMP: ExtractedImpianti = {
   parcheggio: false,
 };
 
+// Gli errori di API e SDK arrivano come JSON grezzo: mostrarli tali e quali
+// all'amministratore non gli dice nulla su cosa fare.
+function messaggioErrore(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err);
+
+  if (/input_tokens_exceeded|too large|413/i.test(raw)) {
+    return "I documenti sono troppo voluminosi per essere analizzati: riprova caricandone meno alla volta.";
+  }
+  if (/rate_limit|429/i.test(raw)) {
+    return "Il servizio AI è momentaneamente sovraccarico: riprova tra qualche minuto.";
+  }
+  if (/tempo massimo|timeout|ETIMEDOUT/i.test(raw)) {
+    return "L'analisi ha superato il tempo massimo: riprova con meno documenti o con file più leggeri.";
+  }
+  if (/Variabili d'ambiente mancanti/i.test(raw)) {
+    return "Configurazione del server incompleta: contatta l'assistenza.";
+  }
+
+  return raw || "Errore sconosciuto";
+}
+
 export default function OnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState<WizardStep>("upload");
@@ -114,7 +135,9 @@ export default function OnboardingPage() {
       });
       if (!startRes.ok) throw new Error(`Avvio elaborazione fallito (status ${startRes.status})`);
 
-      const deadline = Date.now() + 5 * 60_000; // max 5 minuti di attesa
+      // I documenti vengono analizzati uno alla volta: con più file l'attesa
+      // cresce, e la Background Function ha comunque 15 minuti di budget.
+      const deadline = Date.now() + 14 * 60_000;
       setAnalyzingStatus("Analisi documenti in corso…");
 
       let result: ExtractionResult | null = null;
@@ -132,6 +155,11 @@ export default function OnboardingPage() {
           result = statusJson.data as ExtractionResult;
           break;
         }
+
+        if (statusJson.progress) {
+          const { fatti, totale, documento } = statusJson.progress;
+          setAnalyzingStatus(`Documento ${fatti + 1} di ${totale}: ${documento}`);
+        }
       }
 
       if (!result) throw new Error("Tempo massimo di attesa superato, riprova");
@@ -146,7 +174,7 @@ export default function OnboardingPage() {
       setAiFilled(true);
       setStep("results");
     } catch (err) {
-      setExtractionError(err instanceof Error ? err.message : "Errore sconosciuto");
+      setExtractionError(messaggioErrore(err));
       setStep("upload");
     }
   }

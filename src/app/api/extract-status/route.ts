@@ -2,9 +2,10 @@ import { getStore } from "@netlify/blobs";
 import { NextRequest, NextResponse } from "next/server";
 
 interface ExtractionRecord {
-  status: "done" | "error";
+  status: "running" | "done" | "error";
   data?: unknown;
   error?: string;
+  progress?: { fatti: number; totale: number; documento: string };
 }
 
 export async function GET(req: NextRequest) {
@@ -26,6 +27,10 @@ export async function GET(req: NextRequest) {
         { success: false, done: true, error: record.error || "Estrazione fallita" },
         { status: 502 }
       );
+    }
+
+    if (record.status === "running") {
+      return NextResponse.json({ success: true, done: false, progress: record.progress });
     }
 
     return NextResponse.json({ success: true, done: true, data: record.data });
