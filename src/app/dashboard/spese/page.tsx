@@ -1,12 +1,18 @@
 import { createClient } from "@/lib/supabase/server";
 import { getDashboardContext } from "@/lib/dashboard-context";
 import { SpeseChart } from "@/components/dashboard/SpeseChart";
+import { AggiungiBilancio } from "@/components/dashboard/AggiungiBilancio";
+import { AnnoSelector } from "@/components/dashboard/AnnoSelector";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CATEGORIE_SPESA_LABEL, formatEuro } from "@/lib/condotwin-calculations";
 import type { Spesa } from "@/lib/types";
 
-export default async function SpesePage() {
-  const { condominium } = await getDashboardContext();
+export default async function SpesePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ anno?: string }>;
+}) {
+  const { role, condominium } = await getDashboardContext();
   const supabase = await createClient();
   const annoCorrente = new Date().getFullYear();
 
@@ -18,17 +24,28 @@ export default async function SpesePage() {
 
   const spese = (data ?? []) as Spesa[];
   const anni = Array.from(new Set(spese.map((s) => s.anno))).sort((a, b) => b - a);
-  const annoSelezionato = anni.includes(annoCorrente) ? annoCorrente : anni[0];
+
+  const { anno: annoParam } = await searchParams;
+  const annoRichiesto = Number(annoParam);
+  const annoSelezionato = anni.includes(annoRichiesto)
+    ? annoRichiesto
+    : anni.includes(annoCorrente)
+      ? annoCorrente
+      : anni[0];
+
   const speseAnno = spese.filter((s) => s.anno === annoSelezionato);
   const totale = speseAnno.reduce((sum, s) => sum + s.importo, 0);
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-xl font-semibold">Analisi spese</h1>
-        <p className="text-sm text-muted-foreground">
-          Ripartizione delle voci di spesa {annoSelezionato ? `— anno ${annoSelezionato}` : ""}
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold">Analisi spese</h1>
+          <p className="text-sm text-muted-foreground">
+            Ripartizione delle voci di spesa {annoSelezionato ? `— anno ${annoSelezionato}` : ""}
+          </p>
+        </div>
+        {anni.length > 1 && <AnnoSelector anni={anni} selezionato={annoSelezionato} />}
       </div>
 
       {speseAnno.length === 0 ? (
@@ -61,6 +78,10 @@ export default async function SpesePage() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {role === "admin" && (
+        <AggiungiBilancio condominiumId={condominium.id} anniEsistenti={anni} />
       )}
     </div>
   );

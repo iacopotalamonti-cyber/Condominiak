@@ -9,6 +9,7 @@ import {
   EXTRACTION_MAX_TOKENS,
   EXTRACTION_MODEL,
   MAX_PAGES_PER_REQUEST,
+  type ExtractionMode,
   extractionPrompt,
   mergeExtractions,
   normalizeExtraction,
@@ -135,7 +136,8 @@ async function callModel(
   anthropic: Anthropic,
   piece: Piece,
   index: number,
-  total: number
+  total: number,
+  mode: ExtractionMode
 ): Promise<ExtractionResult> {
   const base64 = Buffer.from(piece.data).toString("base64");
   const block: Anthropic.ContentBlockParam =
@@ -160,7 +162,7 @@ async function callModel(
     messages: [
       {
         role: "user",
-        content: [block, { type: "text", text: extractionPrompt(label(piece), index, total) }],
+        content: [block, { type: "text", text: extractionPrompt(label(piece), index, total, mode) }],
       },
     ],
   });
@@ -184,10 +186,11 @@ async function analyzePiece(
   anthropic: Anthropic,
   piece: Piece,
   index: number,
-  total: number
+  total: number,
+  mode: ExtractionMode
 ): Promise<ExtractionResult[]> {
   try {
-    return [await callModel(anthropic, piece, index, total)];
+    return [await callModel(anthropic, piece, index, total, mode)];
   } catch (error) {
     if (!isTooLarge(error)) throw error;
 
@@ -197,7 +200,7 @@ async function analyzePiece(
     console.log(`Blocco oltre il limite di token, lo divido: ${label(piece)}`);
     const results: ExtractionResult[] = [];
     for (const half of halves) {
-      results.push(...(await analyzePiece(anthropic, half, index, total)));
+      results.push(...(await analyzePiece(anthropic, half, index, total, mode)));
     }
     return results;
   }
@@ -215,8 +218,12 @@ async function analyzePiece(
 // Nota: in questo formato di funzione Netlify le variabili d'ambiente NON
 // arrivano affidabilmente via process.env — vanno lette con Netlify.env.get.
 export default async (req: Request) => {
-  const { jobId, files } = (await req.json()) as { jobId: string; files: UploadedFile[] };
-  console.log(`extract-background invoked: jobId=${jobId}, files=${files.length}`);
+  const { jobId, files, mode = "condominio" } = (await req.json()) as {
+    jobId: string;
+    files: UploadedFile[];
+    mode?: ExtractionMode;
+  };
+  console.log(`extract-background invoked: jobId=${jobId}, files=${files.length}, mode=${mode}`);
   console.log(`env check: url=${Boolean(Netlify.env.get("NEXT_PUBLIC_SUPABASE_URL"))} key=${Boolean(Netlify.env.get("SUPABASE_SERVICE_ROLE_KEY"))} anthropic=${Boolean(Netlify.env.get("ANTHROPIC_API_KEY"))}`);
   const store = getStore("extractions");
   const deadline = Date.now() + DEADLINE_MS;
@@ -270,7 +277,7 @@ export default async (req: Request) => {
       });
 
       try {
-        results.push(...(await analyzePiece(anthropic, piece, index + 1, pieces.length)));
+        results.push(...(await analyzePiece(anthropic, piece, index + 1, pieces.length, mode)));
       } catch (error) {
         // Un documento illeggibile non deve buttare via quelli già estratti.
         console.error(`Estrazione fallita per ${label(piece)}:`, error);

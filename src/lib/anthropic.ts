@@ -54,14 +54,43 @@ Regole importanti:
 - In "note" spiega cosa hai trovato e cosa manca
 - I bilanci devono essere ordinati dal più recente (2024) al più antico (2020)`;
 
+// Aggiunta di un singolo esercizio allo storico già esistente: stesso schema,
+// ma al modello interessa solo l'anno di quel bilancio e le sue voci di spesa.
+export const BILANCIO_PROMPT = `Sei un esperto di amministrazione condominiale italiana.
+Questo documento è il bilancio di UN SINGOLO esercizio (preventivo o consuntivo) di un condominio.
+
+Restituisci SOLO JSON valido, senza markdown, senza testo aggiuntivo, con questo schema esatto:
+${EXTRACTION_SCHEMA}
+
+Regole importanti:
+- Compila SOLO "bilanci" (una sola voce: l'anno di questo bilancio) e "spese" (le voci di
+  spesa di quell'anno). Lascia tutto il resto ai valori vuoti dello schema
+- L'anno è quello dell'esercizio a cui il bilancio si riferisce, non la data di approvazione
+  né quella di stampa del documento
+- "prev" è il preventivo, "cons" il consuntivo, "fondo" il fondo di riserva
+- Riconduci ogni voce di spesa a una delle categorie dello schema; quelle che non rientrano
+  in nessuna categoria vanno sommate in "varie"
+- Usa SOLO dati esplicitamente presenti nel documento — non inventare e non stimare mai
+- Per numeri non trovati usa 0
+- "confidence" indica la tua certezza per ogni sezione (0.0-1.0)
+- In "note" scrivi l'anno riconosciuto e da quale parte del documento l'hai ricavato`;
+
+export type ExtractionMode = "condominio" | "bilancio";
+
 // Ogni documento viene analizzato in una richiesta separata: senza questa nota
 // il modello prova a "completare" lo schema deducendo i campi che vede mancare,
 // e in fase di fusione quei valori inventati sovrascriverebbero quelli reali
 // estratti dagli altri documenti.
-export function extractionPrompt(label: string, index: number, total: number): string {
-  if (total <= 1) return EXTRACTION_PROMPT;
+export function extractionPrompt(
+  label: string,
+  index: number,
+  total: number,
+  mode: ExtractionMode = "condominio"
+): string {
+  const base = mode === "bilancio" ? BILANCIO_PROMPT : EXTRACTION_PROMPT;
+  if (total <= 1) return base;
 
-  return `${EXTRACTION_PROMPT}
+  return `${base}
 
 CONTESTO: stai analizzando solo una parte della documentazione (${label} — blocco ${index} di ${total}).
 Estrai esclusivamente i dati presenti in QUESTO blocco e lascia a 0 / "" tutto il resto: i campi

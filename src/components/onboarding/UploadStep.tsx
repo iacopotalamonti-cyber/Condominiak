@@ -4,12 +4,10 @@ import { useCallback, useRef, useState } from "react";
 import { FileText, Image as ImageIcon, Loader2, Upload, X } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
+import { BUCKET, TIPI_ACCETTATI, caricaSuStorage } from "@/lib/extraction-client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { UploadedFile } from "@/lib/types";
-
-const ACCEPTED = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
-const BUCKET = "documenti-condominiali";
 
 interface UploadStepProps {
   onAnalyze: (files: UploadedFile[]) => void;
@@ -24,26 +22,14 @@ export function UploadStep({ onAnalyze, onSkip }: UploadStepProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const addFiles = useCallback(async (fileList: FileList) => {
-    const accepted = Array.from(fileList).filter((f) => ACCEPTED.includes(f.type));
-    if (!accepted.length) return;
+    const accettati = Array.from(fileList).filter((f) => TIPI_ACCETTATI.includes(f.type));
+    if (!accettati.length) return;
 
     setUploading(true);
     setError(null);
     try {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error("Sessione scaduta, ricarica la pagina");
-
-      const uploaded: UploadedFile[] = [];
-      for (const file of accepted) {
-        const path = `pending/${user.id}/${crypto.randomUUID()}-${file.name}`;
-        const { error: uploadErr } = await supabase.storage.from(BUCKET).upload(path, file);
-        if (uploadErr) throw uploadErr;
-        uploaded.push({ name: file.name, type: file.type, path });
-      }
-      setFiles((prev) => [...prev, ...uploaded]);
+      const caricati = await caricaSuStorage(accettati);
+      setFiles((prev) => [...prev, ...caricati]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Caricamento fallito");
     } finally {
@@ -114,7 +100,7 @@ export function UploadStep({ onAnalyze, onSkip }: UploadStepProps) {
             ref={inputRef}
             type="file"
             multiple
-            accept={ACCEPTED.join(",")}
+            accept={TIPI_ACCETTATI.join(",")}
             className="hidden"
             onChange={(e) => e.target.files && addFiles(e.target.files)}
           />
