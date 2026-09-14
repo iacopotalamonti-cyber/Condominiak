@@ -1,15 +1,9 @@
 import type { Context } from "@netlify/functions";
 import { getStore } from "@netlify/blobs";
 import { createClient } from "@supabase/supabase-js";
-import type Anthropic from "@anthropic-ai/sdk";
+import Anthropic from "@anthropic-ai/sdk";
 
-import {
-  anthropic,
-  EXTRACTION_MODEL,
-  EXTRACTION_MAX_TOKENS,
-  EXTRACTION_PROMPT,
-  parseExtractionOutput,
-} from "../../src/lib/anthropic";
+import { EXTRACTION_MODEL, EXTRACTION_MAX_TOKENS, EXTRACTION_PROMPT, parseExtractionOutput } from "../../src/lib/anthropic";
 import type { UploadedFile } from "../../src/lib/types";
 
 const BUCKET = "documenti-condominiali";
@@ -26,17 +20,27 @@ function mediaTypeForImage(type: string): "image/jpeg" | "image/png" | "image/we
 // funzione sincrona) e vengono scaricati qui con la service role key. Il
 // risultato finisce su Netlify Blobs, dove /api/extract-status lo legge
 // via polling.
+//
+// Nota: in questo formato di funzione Netlify le variabili d'ambiente NON
+// arrivano affidabilmente via process.env — vanno lette con Netlify.env.get.
 export default async (req: Request, context: Context) => {
   const { jobId, files } = (await req.json()) as { jobId: string; files: UploadedFile[] };
   const store = getStore("extractions");
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  );
-
   try {
+    const supabaseUrl = Netlify.env.get("NEXT_PUBLIC_SUPABASE_URL");
+    const serviceRoleKey = Netlify.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const anthropicApiKey = Netlify.env.get("ANTHROPIC_API_KEY");
+
+    if (!supabaseUrl || !serviceRoleKey || !anthropicApiKey) {
+      throw new Error("Variabili d'ambiente mancanti per l'elaborazione in background");
+    }
+
+    const supabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const anthropic = new Anthropic({ apiKey: anthropicApiKey });
+
     const content: Anthropic.MessageParam["content"] = [];
 
     for (const file of files) {
