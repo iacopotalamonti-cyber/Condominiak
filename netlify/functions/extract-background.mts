@@ -33,7 +33,12 @@ export default async (req: Request, context: Context) => {
     const anthropicApiKey = Netlify.env.get("ANTHROPIC_API_KEY");
 
     if (!supabaseUrl || !serviceRoleKey || !anthropicApiKey) {
-      throw new Error("Variabili d'ambiente mancanti per l'elaborazione in background");
+      const missing = [
+        !supabaseUrl && "NEXT_PUBLIC_SUPABASE_URL",
+        !serviceRoleKey && "SUPABASE_SERVICE_ROLE_KEY",
+        !anthropicApiKey && "ANTHROPIC_API_KEY",
+      ].filter(Boolean);
+      throw new Error(`Variabili d'ambiente mancanti: ${missing.join(", ")}`);
     }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
