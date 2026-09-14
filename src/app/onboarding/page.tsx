@@ -110,27 +110,25 @@ export default function OnboardingPage() {
       const createJson = await createRes.json();
       if (!createJson.success) throw new Error(createJson.error || "Invio fallito");
 
-      const batchId = createJson.batchId as string;
-      const deadline = Date.now() + 10 * 60_000; // max 10 minuti di attesa
+      const jobId = createJson.jobId as string;
+      const deadline = Date.now() + 5 * 60_000; // max 5 minuti di attesa
+      setAnalyzingStatus("Analisi documenti in corso…");
 
       let result: ExtractionResult | null = null;
       while (Date.now() < deadline) {
-        await new Promise((resolve) => setTimeout(resolve, 4000));
+        await new Promise((resolve) => setTimeout(resolve, 3000));
 
-        const statusRes = await fetch(`/api/extract-status?batchId=${encodeURIComponent(batchId)}`);
+        const statusRes = await fetch(`/api/extract-status?jobId=${encodeURIComponent(jobId)}`);
         const statusJson = await statusRes.json();
 
-        if (!statusJson.success) throw new Error(statusJson.error || "Estrazione fallita");
+        if (statusJson.done && !statusJson.success) {
+          throw new Error(statusJson.error || "Estrazione fallita");
+        }
 
         if (statusJson.done) {
           result = statusJson.data as ExtractionResult;
           break;
         }
-
-        const counts = statusJson.counts;
-        setAnalyzingStatus(
-          counts?.processing > 0 ? "Analisi documenti in corso…" : "In coda, attendere…"
-        );
       }
 
       if (!result) throw new Error("Tempo massimo di attesa superato, riprova");
