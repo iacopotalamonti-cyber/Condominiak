@@ -26,6 +26,7 @@ function mediaTypeForImage(type: string): "image/jpeg" | "image/png" | "image/we
 export default async (req: Request, context: Context) => {
   const { jobId, files } = (await req.json()) as { jobId: string; files: UploadedFile[] };
   console.log(`extract-background invoked: jobId=${jobId}, files=${files.length}`);
+  console.log(`env check: url=${Boolean(Netlify.env.get("NEXT_PUBLIC_SUPABASE_URL"))} key=${Boolean(Netlify.env.get("SUPABASE_SERVICE_ROLE_KEY"))} anthropic=${Boolean(Netlify.env.get("ANTHROPIC_API_KEY"))}`);
   const store = getStore("extractions");
 
   try {
