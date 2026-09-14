@@ -148,7 +148,7 @@ export default function OnboardingPage() {
   const showStepper = STEP_ORDER.includes(step as (typeof STEP_ORDER)[number]);
 
   return (
-    <div className="min-h-screen bg-muted/30 px-4 py-10">
+    <div className="min-h-screen bg-muted/30 px-4 pt-10 pb-24">
       <div className="mx-auto max-w-3xl">
         <div className="mb-8 flex flex-col items-center gap-2">
           <div className="flex size-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
