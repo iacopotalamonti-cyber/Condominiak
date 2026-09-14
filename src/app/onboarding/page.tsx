@@ -100,17 +100,20 @@ export default function OnboardingPage() {
   async function handleAnalyze(files: UploadedFile[]) {
     setStep("analyzing");
     setExtractionError(null);
-    setAnalyzingStatus("Invio documenti…");
+    setAnalyzingStatus("Avvio analisi…");
     try {
-      const createRes = await fetch("/api/extract-documents", {
+      const jobId = crypto.randomUUID();
+
+      // Chiamata diretta dal browser alla Background Function: evitiamo che
+      // una funzione serverless ne chiami un'altra internamente (chiamata
+      // funzione-a-funzione, inaffidabile nel sandbox di Netlify).
+      const startRes = await fetch("/.netlify/functions/extract-background", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ files }),
+        body: JSON.stringify({ jobId, files }),
       });
-      const createJson = await createRes.json();
-      if (!createJson.success) throw new Error(createJson.error || "Invio fallito");
+      if (!startRes.ok) throw new Error(`Avvio elaborazione fallito (status ${startRes.status})`);
 
-      const jobId = createJson.jobId as string;
       const deadline = Date.now() + 5 * 60_000; // max 5 minuti di attesa
       setAnalyzingStatus("Analisi documenti in corso…");
 
