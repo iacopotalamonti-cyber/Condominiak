@@ -50,12 +50,28 @@ export async function POST(req: NextRequest) {
       .map((b) => (b as Anthropic.TextBlock).text)
       .join("");
 
-    const clean = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
-    const extracted = JSON.parse(clean);
+    let clean = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+    const firstBrace = clean.indexOf("{");
+    const lastBrace = clean.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace !== -1) {
+      clean = clean.slice(firstBrace, lastBrace + 1);
+    }
+
+    let extracted;
+    try {
+      extracted = JSON.parse(clean);
+    } catch {
+      console.error("JSON parse failed. Raw model output:", text);
+      return NextResponse.json(
+        { success: false, error: "La risposta AI non era in formato JSON valido", raw: text.slice(0, 2000) },
+        { status: 502 }
+      );
+    }
 
     return NextResponse.json({ success: true, data: extracted });
   } catch (error) {
     console.error("Extraction error:", error);
-    return NextResponse.json({ success: false, error: "Estrazione fallita" }, { status: 500 });
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
