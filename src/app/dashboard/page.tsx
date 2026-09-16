@@ -12,30 +12,35 @@ import {
   percentualeMorosita,
   scoreEdificio,
 } from "@/lib/condotwin-calculations";
-import type { Impianto, Pagamento, Unita } from "@/lib/types";
+import { esercizioCorrente } from "@/lib/bilancio";
+import type { Bilancio, Impianto, Pagamento, Spesa, Unita } from "@/lib/types";
 
 export default async function DashboardPage() {
   const { condominium } = await getDashboardContext();
   const supabase = await createClient();
   const annoCorrente = new Date().getFullYear();
 
-  const [{ data: unita }, { data: pagamenti }, { data: impianti }, { data: bilancioCorrente }] =
+  const [{ data: unita }, { data: pagamenti }, { data: impianti }, { data: bilanci }, { data: spese }] =
     await Promise.all([
       supabase.from("unita").select("*").eq("condominium_id", condominium.id).order("interno"),
       supabase.from("pagamenti").select("*").eq("condominium_id", condominium.id).eq("anno", annoCorrente),
       supabase.from("impianti").select("*").eq("condominium_id", condominium.id),
-      supabase
-        .from("bilanci")
-        .select("*")
-        .eq("condominium_id", condominium.id)
-        .order("anno", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
+      supabase.from("bilanci").select("*").eq("condominium_id", condominium.id),
+      supabase.from("spese").select("*").eq("condominium_id", condominium.id),
     ]);
 
   const unitaList = (unita ?? []) as Unita[];
   const pagamentiList = (pagamenti ?? []) as Pagamento[];
   const impiantiList = (impianti ?? []) as Impianto[];
+
+  // Lo stesso totale che mostrano Analisi spese e Bilanci 5 anni. Prima questa
+  // scheda prendeva il consuntivo del bilancio più recente e lo chiamava "anno
+  // corrente" anche quando l'anno era un altro.
+  const esercizio = esercizioCorrente(
+    (bilanci ?? []) as Bilancio[],
+    (spese ?? []) as Spesa[],
+    annoCorrente
+  );
 
   const morosita = calcolaMorosita(pagamentiList);
   const morositaPct = percentualeMorosita(pagamentiList);
@@ -80,9 +85,15 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KPICard label="Unità immobiliari" value={String(unitaList.length)} icon={Users} />
         <KPICard
-          label="Consuntivo anno corrente"
-          value={formatEuro(bilancioCorrente?.consuntivo)}
+          label={esercizio ? `Spesa esercizio ${esercizio.anno}` : "Spesa esercizio"}
+          value={formatEuro(esercizio?.totale)}
+          hint={
+            esercizio?.nonClassificato
+              ? `${formatEuro(esercizio.nonClassificato)} ancora da classificare`
+              : undefined
+          }
           icon={Wallet}
+          tone={esercizio?.nonClassificato ? "warning" : undefined}
         />
         <KPICard
           label="Morosità"

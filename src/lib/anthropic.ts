@@ -12,6 +12,11 @@ import type {
   Fonte,
   ValoreScartato,
 } from "./types";
+// Deve restare uguale a quella di ./bilancio.ts, che è il riferimento per
+// l'interfaccia. Non la si importa da lì perché questo modulo viene impacchettato
+// anche dentro la Netlify Function, e un import in più fra i due è una dipendenza
+// che non serve: a tenerle allineate ci pensa un test.
+const TOLLERANZA_QUADRATURA = 1;
 
 // I bilanci sono tabelle fitte di numeri e l'errore di lettura non si vede:
 // vale la pena del modello più capace, con il ragionamento acceso.
@@ -31,10 +36,6 @@ export const MAX_PAGES_PER_REQUEST = 20;
 // confine viene comunque vista intera in uno dei due blocchi, invece di
 // produrre due subtotali parziali spacciati per totali.
 export const PAGINE_SOVRAPPOSTE = 2;
-
-// Scostamento oltre il quale la somma delle voci e il totale del documento
-// non si considerano più la stessa cifra (arrotondamenti dell'amministratore).
-export const TOLLERANZA_QUADRATURA = 1;
 
 const CATEGORIE_SPESA = [
   "riscaldamento",
@@ -125,10 +126,21 @@ const REGOLE_IMPORTI = `Regole sugli importi:
   il totale complessivo stampato, non la somma che faresti tu
 - Le quote individuali e i riparti millesimali non sono voci di spesa del
   condominio: servono solo gli importi complessivi
-- Unica eccezione alla regola di non calcolare: le voci che non rientrano in
-  nessuna categoria dello schema vanno sommate in "varie"; in quel caso scrivi in
-  "note" quali voci hai sommato, e lascia "pag" della categoria "varie" alla
-  pagina in cui quelle voci sono elencate`;
+- Molti rendiconti sono ANALITICI: elencano i singoli movimenti raggruppati per
+  voce, con codici tipo 001.001, 002.004, 100.002. In quel caso l'importo di una
+  categoria è il TOTALE del periodo per quella voce, mai una sola delle sue
+  righe. Se il documento stampa il subtotale della voce usa quello e copialo in
+  "txt"; se non lo stampa, somma tutte le righe di quella voce e scrivi in "txt"
+  la prima e l'ultima riga che hai sommato
+- Sommare le righe di una stessa voce, e sommare in "varie" le voci che non
+  rientrano in nessuna categoria dello schema, è l'unico calcolo consentito:
+  tutto il resto va copiato come stampato. Quando sommi, dillo in "note"
+- CONTROLLO FINALE, fallo sempre: somma tutte le categorie e confrontale con il
+  totale generale stampato nel documento. Se non torna hai saltato delle righe,
+  e devi tornare a cercarle prima di rispondere. Se dopo la ricerca resta una
+  differenza, NON inventare dove metterla e non gonfiare una categoria per far
+  quadrare i conti: lasciala fuori e scrivi in "note" quanto manca e in quali
+  pagine pensi che sia`;
 
 const REGOLE_BILANCI = `Regole sui bilanci:
 - "bilanci" contiene una voce per ogni esercizio effettivamente presente nel

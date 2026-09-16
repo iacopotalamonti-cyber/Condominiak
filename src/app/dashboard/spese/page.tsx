@@ -6,7 +6,7 @@ import { AnnoSelector } from "@/components/dashboard/AnnoSelector";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FonteLink } from "@/components/estrazione/FonteLink";
 import { CATEGORIE_SPESA_LABEL, formatEuro } from "@/lib/condotwin-calculations";
-import { TOLLERANZA_QUADRATURA } from "@/lib/anthropic";
+import { ORIGINE_TOTALE_LABEL, esercizi } from "@/lib/bilancio";
 import type { Bilancio, Spesa } from "@/lib/types";
 
 export default async function SpesePage({
@@ -32,7 +32,11 @@ export default async function SpesePage({
 
   const spese = (data ?? []) as Spesa[];
   const bilanci = (datiBilanci ?? []) as Bilancio[];
-  const anni = Array.from(new Set(spese.map((s) => s.anno))).sort((a, b) => b - a);
+
+  // Un solo calcolo del totale per tutte le pagine: qui si sceglie solo quale
+  // esercizio mostrare.
+  const tuttiEsercizi = esercizi(bilanci, spese);
+  const anni = tuttiEsercizi.map((e) => e.anno);
 
   const { anno: annoParam } = await searchParams;
   const annoRichiesto = Number(annoParam);
@@ -43,15 +47,7 @@ export default async function SpesePage({
       : anni[0];
 
   const speseAnno = spese.filter((s) => s.anno === annoSelezionato);
-  const totale = speseAnno.reduce((sum, s) => sum + s.importo, 0);
-
-  // Il totale stampato sul documento, quando è stato registrato: confrontarlo
-  // con la somma delle voci dice in un colpo d'occhio se l'estrazione ha perso
-  // o duplicato qualcosa.
-  const bilancioAnno = bilanci.find((b) => b.anno === annoSelezionato);
-  const totaleDocumento = bilancioAnno?.totale_documento ?? null;
-  const scostamento = totaleDocumento ? totale - totaleDocumento : 0;
-  const quadra = Math.abs(scostamento) <= TOLLERANZA_QUADRATURA;
+  const esercizio = tuttiEsercizi.find((e) => e.anno === annoSelezionato);
 
   return (
     <div className="flex flex-col gap-6">
@@ -65,7 +61,7 @@ export default async function SpesePage({
         {anni.length > 1 && <AnnoSelector anni={anni} selezionato={annoSelezionato} />}
       </div>
 
-      {speseAnno.length === 0 ? (
+      {!esercizio || (speseAnno.length === 0 && !esercizio.totale) ? (
         <Card>
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
             Nessuna voce di spesa registrata.
@@ -76,19 +72,25 @@ export default async function SpesePage({
           <CardHeader className="flex-row items-center justify-between">
             <CardTitle className="text-base">Spese per categoria</CardTitle>
             <span className="text-sm font-medium text-muted-foreground">
-              Totale: {formatEuro(totale)}
+              Totale esercizio: {formatEuro(esercizio.totale)}
             </span>
           </CardHeader>
           <CardContent className="flex flex-col gap-6">
-            {totaleDocumento !== null && !quadra && (
+            {esercizio.nonClassificato > 0 && (
               <p className="rounded-md bg-warning/10 px-3 py-2 text-sm text-warning">
-                La somma delle voci ({formatEuro(totale)}) non corrisponde al totale stampato nel
-                documento ({formatEuro(totaleDocumento)}): differenza di{" "}
-                {formatEuro(Math.abs(scostamento))}. Ricarica il bilancio di quest&apos;anno per
-                rivedere le voci.
+                Di {formatEuro(esercizio.totale)} spesi, {formatEuro(esercizio.sommaVoci)} sono
+                ricondotti a una categoria: {formatEuro(esercizio.nonClassificato)} non lo sono
+                ancora. Ricarica il bilancio di quest&apos;anno per classificarli.
               </p>
             )}
-            <SpeseChart spese={speseAnno} />
+            {esercizio.eccedenza > 0 && (
+              <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                Le voci sommano {formatEuro(esercizio.sommaVoci)}, più del totale dell&apos;esercizio
+                ({formatEuro(esercizio.totale)}): {formatEuro(esercizio.eccedenza)} sono contati due
+                volte. Ricarica il bilancio per correggerli.
+              </p>
+            )}
+            <SpeseChart spese={speseAnno} nonClassificato={esercizio.nonClassificato} />
             <div className="grid grid-cols-2 gap-x-6 gap-y-2 border-t pt-4 sm:grid-cols-3">
               {[...speseAnno]
                 .sort((a, b) => b.importo - a.importo)
@@ -108,7 +110,23 @@ export default async function SpesePage({
                     />
                   </div>
                 ))}
+              {esercizio.nonClassificato > 0 && (
+                <div className="flex flex-col gap-0.5">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-warning">Non classificato</span>
+                    <span className="font-medium tabular-nums text-warning">
+                      {formatEuro(esercizio.nonClassificato)}
+                    </span>
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    presente nel totale, non in una categoria
+                  </span>
+                </div>
+              )}
             </div>
+            <p className="text-xs text-muted-foreground">
+              Totale dell&apos;esercizio preso dal {ORIGINE_TOTALE_LABEL[esercizio.origine]}.
+            </p>
           </CardContent>
         </Card>
       )}

@@ -14,6 +14,7 @@ import {
   quotaAnnua,
   quotaMensile,
 } from "@/lib/condotwin-calculations";
+import { esercizioCorrente } from "@/lib/bilancio";
 import type { Bilancio, Documento, Pagamento, Spesa, Unita } from "@/lib/types";
 
 const STATO_VARIANT: Record<string, "success" | "warning" | "destructive"> = {
@@ -57,15 +58,9 @@ export default async function AppartamentoPage({
     return <p className="text-sm text-muted-foreground">Nessuna unità disponibile.</p>;
   }
 
-  const [{ data: bilancioCorrente }, { data: pagamentiData }, { data: speseData }, { data: documentiData }] =
+  const [{ data: bilanciData }, { data: pagamentiData }, { data: speseData }, { data: documentiData }] =
     await Promise.all([
-      supabase
-        .from("bilanci")
-        .select("*")
-        .eq("condominium_id", condominium.id)
-        .order("anno", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
+      supabase.from("bilanci").select("*").eq("condominium_id", condominium.id),
       supabase
         .from("pagamenti")
         .select("*")
@@ -80,15 +75,21 @@ export default async function AppartamentoPage({
         .order("created_at", { ascending: false }),
     ]);
 
-  const bilancio = bilancioCorrente as Bilancio | null;
   const pagamenti = (pagamentiData ?? []) as Pagamento[];
-  const anniSpese = Array.from(new Set((speseData ?? []).map((s: Spesa) => s.anno))).sort((a, b) => b - a);
-  const speseAnnoCorrente = ((speseData ?? []) as Spesa[]).filter(
-    (s) => s.anno === (anniSpese.includes(annoCorrente) ? annoCorrente : anniSpese[0])
-  );
+  const spese = (speseData ?? []) as Spesa[];
   const documenti = (documentiData ?? []) as Documento[];
 
-  const consuntivoAnnuo = bilancio?.consuntivo ?? 0;
+  // Stesso esercizio e stesso totale delle altre pagine. Prima la quota veniva
+  // dal consuntivo del bilancio più recente mentre il dettaglio per categoria
+  // veniva da un altro anno: due numeri che non potevano tornare.
+  const esercizio = esercizioCorrente(
+    (bilanciData ?? []) as Bilancio[],
+    spese,
+    annoCorrente
+  );
+  const speseAnnoCorrente = spese.filter((s) => s.anno === esercizio?.anno);
+
+  const consuntivoAnnuo = esercizio?.totale ?? 0;
   const rataMensile = quotaMensile(unitaSelezionata.millesimi, consuntivoAnnuo);
   const totaleAnnuo = quotaAnnua(unitaSelezionata.millesimi, consuntivoAnnuo);
 
@@ -113,7 +114,11 @@ export default async function AppartamentoPage({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KPICard label="Millesimi di proprietà" value={unitaSelezionata.millesimi.toFixed(2)} icon={Percent} />
         <KPICard label="Rata mensile" value={formatEuro(rataMensile)} icon={Wallet} />
-        <KPICard label="Totale annuo" value={formatEuro(totaleAnnuo)} icon={CalendarCheck} />
+        <KPICard
+          label={esercizio ? `Totale annuo ${esercizio.anno}` : "Totale annuo"}
+          value={formatEuro(totaleAnnuo)}
+          icon={CalendarCheck}
+        />
         <KPICard
           label="Stato pagamento corrente"
           value={STATO_LABEL[pagamentoCorrente?.stato ?? "ok"]}
@@ -131,7 +136,9 @@ export default async function AppartamentoPage({
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Breakdown quote per categoria</CardTitle>
+          <CardTitle className="text-base">
+            Breakdown quote per categoria {esercizio?.anno ?? ""}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {speseAnnoCorrente.length === 0 ? (
@@ -149,6 +156,14 @@ export default async function AppartamentoPage({
                   </div>
                 );
               })}
+              {esercizio && esercizio.nonClassificato > 0 && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-warning">Non classificato</span>
+                  <span className="font-medium tabular-nums text-warning">
+                    {formatEuro((unitaSelezionata.millesimi / 1000) * esercizio.nonClassificato)}
+                  </span>
+                </div>
+              )}
             </div>
           )}
         </CardContent>

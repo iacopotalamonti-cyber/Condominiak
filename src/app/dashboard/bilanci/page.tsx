@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { FonteLink } from "@/components/estrazione/FonteLink";
 import { formatEuro, variazioneAnnua } from "@/lib/condotwin-calculations";
-import { TOLLERANZA_QUADRATURA } from "@/lib/anthropic";
+import { esercizi } from "@/lib/bilancio";
 import type { Bilancio, FonteSalvata, Spesa } from "@/lib/types";
 
 export default async function BilanciPage() {
@@ -20,17 +20,15 @@ export default async function BilanciPage() {
       .select("*")
       .eq("condominium_id", condominium.id)
       .order("anno", { ascending: false }),
-    supabase.from("spese").select("anno, importo").eq("condominium_id", condominium.id),
+    supabase.from("spese").select("*").eq("condominium_id", condominium.id),
   ]);
 
   const bilanci = (data ?? []) as Bilancio[];
+  const spese = (datiSpese ?? []) as Spesa[];
 
-  // Somma delle voci registrate per ciascun anno: confrontata con il totale
-  // stampato sul documento dice se quell'anno è da ricontrollare.
-  const sommaSpesePerAnno = new Map<number, number>();
-  for (const spesa of (datiSpese ?? []) as Pick<Spesa, "anno" | "importo">[]) {
-    sommaSpesePerAnno.set(spesa.anno, (sommaSpesePerAnno.get(spesa.anno) ?? 0) + spesa.importo);
-  }
+  // Stesso calcolo di Analisi spese e della dashboard: il totale di un
+  // esercizio è uno solo, da qualunque pagina lo si guardi.
+  const perAnno = new Map(esercizi(bilanci, spese).map((e) => [e.anno, e]));
 
   function fonteDi(bilancio: Bilancio, campo: string): FonteSalvata | null {
     return bilancio.fonti?.[campo] ?? null;
@@ -80,6 +78,7 @@ export default async function BilanciPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Anno</TableHead>
+                    <TableHead>Totale esercizio</TableHead>
                     <TableHead>Preventivo</TableHead>
                     <TableHead>Consuntivo</TableHead>
                     <TableHead>Fondo riserva</TableHead>
@@ -91,16 +90,18 @@ export default async function BilanciPage() {
                   {bilanci.map((b, i) => {
                     const precedente = bilanci[i + 1];
                     const variazione = precedente
-                      ? variazioneAnnua(b.consuntivo ?? 0, precedente.consuntivo ?? 0)
+                      ? variazioneAnnua(
+                          perAnno.get(b.anno)?.totale ?? 0,
+                          perAnno.get(precedente.anno)?.totale ?? 0
+                        )
                       : "—";
-                    const sommaSpese = sommaSpesePerAnno.get(b.anno);
-                    const scostamento =
-                      b.totale_documento && sommaSpese !== undefined
-                        ? sommaSpese - b.totale_documento
-                        : null;
+                    const esercizio = perAnno.get(b.anno);
                     return (
                       <TableRow key={b.id}>
                         <TableCell className="font-medium">{b.anno}</TableCell>
+                        <TableCell className="font-medium tabular-nums">
+                          {formatEuro(esercizio?.totale)}
+                        </TableCell>
                         <TableCell>
                           <div className="flex flex-col gap-0.5">
                             {formatEuro(b.preventivo)}
@@ -130,13 +131,17 @@ export default async function BilanciPage() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          {scostamento === null ? (
+                          {!esercizio || !esercizio.totale ? (
                             <span className="text-xs text-muted-foreground">non verificabile</span>
-                          ) : Math.abs(scostamento) <= TOLLERANZA_QUADRATURA ? (
+                          ) : esercizio.quadra ? (
                             <Badge variant="success">i conti tornano</Badge>
+                          ) : esercizio.nonClassificato ? (
+                            <Badge variant="warning">
+                              {formatEuro(esercizio.nonClassificato)} non classificati
+                            </Badge>
                           ) : (
                             <Badge variant="destructive">
-                              scarto {formatEuro(Math.abs(scostamento))}
+                              {formatEuro(esercizio.eccedenza)} contati due volte
                             </Badge>
                           )}
                         </TableCell>
