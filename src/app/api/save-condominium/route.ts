@@ -10,6 +10,7 @@ import type {
   UploadedFile,
 } from "@/lib/types";
 import { CATEGORIE_SPESA_LABEL } from "@/lib/condotwin-calculations";
+import { righeMovimenti } from "@/lib/movimenti";
 
 interface SaveCondominiumBody {
   info: ExtractedInfo;
@@ -156,6 +157,16 @@ export async function POST(req: NextRequest) {
 
     if (righeSpese.length) {
       const { error } = await supabase.from("spese").insert(righeSpese);
+      if (error) throw error;
+    }
+
+    // 4b. movimenti: il dettaglio riga per riga di ciascun esercizio
+    const righeMov = esercizi.flatMap((b) =>
+      righeMovimenti(condominiumId, b.anno, b.movimenti, CATEGORIE_SPESA_LABEL, percorsoDi)
+    );
+
+    if (righeMov.length) {
+      const { error } = await supabase.from("movimenti").insert(righeMov);
       if (error) throw error;
     }
 

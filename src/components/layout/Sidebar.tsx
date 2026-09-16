@@ -9,6 +9,7 @@ import {
   PieChart,
   Wrench,
   Home,
+  Truck,
   FileText,
   Settings,
 } from "lucide-react";
@@ -23,6 +24,7 @@ const ADMIN_LINKS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/bilanci", label: "Bilanci 5 anni", icon: Wallet },
   { href: "/dashboard/spese", label: "Analisi spese", icon: PieChart },
+  { href: "/dashboard/fornitori", label: "Fornitori", icon: Truck },
   { href: "/dashboard/impianti", label: "Impianti", icon: Wrench },
   { href: "/dashboard/appartamento", label: "Il mio appartamento", icon: Home },
   { href: "/dashboard/documenti", label: "Documenti", icon: FileText },

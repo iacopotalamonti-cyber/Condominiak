@@ -88,6 +88,26 @@ export interface Spesa {
   note: string | null;
 }
 
+// Una riga del rendiconto analitico: la spesa come è stata realmente sostenuta,
+// con il fornitore che l'ha emessa.
+export interface Movimento {
+  id: string;
+  created_at: string;
+  condominium_id: string;
+  anno: number;
+  data: string | null;
+  descrizione: string;
+  fornitore: string | null;
+  categoria: string;
+  importo: number;
+  fonte_documento: string | null;
+  fonte_pagina: number | null;
+  fonte_testo: string | null;
+  fonte_verificata: boolean;
+  fonte_verificabile: boolean;
+  documento_path: string | null;
+}
+
 export type TipoImpianto =
   | "riscaldamento"
   | "ascensore"
@@ -232,6 +252,17 @@ export interface Controllo {
   messaggio: string;
 }
 
+export interface ExtractedMovimento {
+  // Formato AAAA-MM-GG quando il documento la riporta, altrimenti "".
+  data: string;
+  descrizione: string;
+  // Vuoto quando la riga non nomina un fornitore: consumi, conguagli, giroconti.
+  fornitore: string;
+  categoria: CategoriaSpesa;
+  importo: number;
+  fonte: Fonte | null;
+}
+
 export interface ExtractedBilancio {
   anno: number;
   prev: number;
@@ -240,6 +271,9 @@ export interface ExtractedBilancio {
   // Le spese appartengono all'esercizio, non al condominio: tenerle qui
   // impedisce che la voce di un anno finisca attribuita a un altro.
   spese: ExtractedSpese;
+  // Il dettaglio riga per riga, quando il documento è analitico. Se c'è, i
+  // totali in `spese` sono la somma di queste righe e non una lettura a parte.
+  movimenti: ExtractedMovimento[];
   // Il totale stampato nel documento, quando c'è: serve a verificare la somma
   // delle voci senza doversi fidare del modello.
   totale: number;

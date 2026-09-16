@@ -74,6 +74,15 @@ stesso:
 - **conflitti** — quando due documenti danno importi diversi per lo stesso
   campo, il valore scartato resta visibile invece di essere scelto in silenzio.
 
+I rendiconti analitici elencano le singole righe, ciascuna con il proprio
+fornitore: quelle righe finiscono in `movimenti` e alimentano la pagina
+**Fornitori** (`/dashboard/fornitori`), che mostra quanto ha incassato ciascuno,
+con quali categorie e in quali anni, e il link alla riga del documento. Quando il
+dettaglio c'è, i totali per categoria sono la somma delle sue righe: quadrano per
+costruzione invece che per fiducia. Le righe che non nominano una controparte —
+consumi a contatore, conguagli, giroconti — restano nel totale sotto una voce
+dichiarata, invece di sparire.
+
 Quando i conti di un esercizio non tornano, l'estrazione rilegge una volta sola
 il tratto di documento da cui vengono quegli importi, per intero: la causa più
 frequente è una tabella tagliata a metà fra due blocchi di pagine.

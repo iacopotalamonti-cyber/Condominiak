@@ -1,5 +1,7 @@
 import type {
   CampoImporto,
+  CategoriaSpesa,
+  ExtractedMovimento,
   Controllo,
   ExtractedBilancio,
   ExtractedImpianti,
@@ -96,7 +98,8 @@ export const EXTRACTION_SCHEMA = `{
       "cons": ${IMPORTO_SCHEMA},
       "fondo": ${IMPORTO_SCHEMA},
       "totale": ${IMPORTO_SCHEMA},
-      "spese": {${SPESE_SCHEMA}}
+      "spese": {${SPESE_SCHEMA}},
+      "movimenti": [{"data": "", "desc": "", "forn": "", "cat": "", "v": 0, "pag": 0, "txt": ""}]
     }
   ],
   "imp": {"riscaldamento":false,"ascensore":false,"areeVerdi":false,"raffrescamento":false,"citofono":false,"parcheggio":false},
@@ -142,6 +145,21 @@ const REGOLE_IMPORTI = `Regole sugli importi:
   quadrare i conti: lasciala fuori e scrivi in "note" quanto manca e in quali
   pagine pensi che sia`;
 
+const REGOLE_MOVIMENTI = `Regole sui movimenti (il dettaglio riga per riga):
+- Se il documento è analitico, compila "movimenti" con UNA VOCE PER OGNI RIGA di
+  spesa che elenca: è il dettaglio, non un riassunto
+- "desc" è la descrizione della riga come stampata
+- "forn" è il nome del fornitore che compare in quella riga (la ditta, la
+  società, il professionista). Lascialo "" se la riga non nomina nessuno, come
+  per consumi, conguagli e giroconti: non dedurre il fornitore da altre righe
+- "cat" è una delle categorie dello schema, la stessa a cui assegneresti la riga
+- "data" è la data del movimento in formato AAAA-MM-GG; "" se non c'è
+- "v", "pag" e "txt" seguono le stesse regole degli altri importi
+- Se il documento NON elenca le singole righe, lascia "movimenti" vuoto: non
+  inventare un dettaglio che non c'è
+- Non saltare righe perché piccole o ripetitive: il dettaglio serve proprio a
+  far tornare i conti`;
+
 const REGOLE_BILANCI = `Regole sui bilanci:
 - "bilanci" contiene una voce per ogni esercizio effettivamente presente nel
   documento e nessuna in più: se il documento riguarda un solo anno, restituisci
@@ -160,6 +178,8 @@ Restituisci SOLO JSON valido, senza markdown, senza testo aggiuntivo, con questo
 ${EXTRACTION_SCHEMA}
 
 ${REGOLE_IMPORTI}
+
+${REGOLE_MOVIMENTI}
 
 ${REGOLE_BILANCI}
 
@@ -183,6 +203,8 @@ ${EXTRACTION_SCHEMA}
   importi e le sue voci di spesa. Lascia tutto il resto ai valori vuoti dello schema
 
 ${REGOLE_IMPORTI}
+
+${REGOLE_MOVIMENTI}
 
 ${REGOLE_BILANCI}
 
@@ -281,6 +303,10 @@ function confidence(value: unknown): number {
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+function arrotonda(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
 function eur(value: number): string {
@@ -444,10 +470,75 @@ export function bilancioVuoto(anno = 0): ExtractedBilancio {
     cons: 0,
     fondo: 0,
     spese: mapSpese(() => 0),
+    movimenti: [],
     totale: 0,
     fonti: {},
     conflitti: {},
   };
+}
+
+const CATEGORIE_VALIDE = new Set<string>(CATEGORIE_SPESA);
+
+function categoriaValida(valore: unknown): CategoriaSpesa {
+  const categoria = str(valore).toLowerCase();
+  // Una categoria fuori elenco finisce in "varie" invece di far sparire la
+  // riga: l'importo resta nei conti, solo meno qualificato.
+  return (CATEGORIE_VALIDE.has(categoria) ? categoria : "varie") as CategoriaSpesa;
+}
+
+function dataValida(valore: unknown): string {
+  const data = str(valore);
+  return /^\d{4}-\d{2}-\d{2}$/.test(data) ? data : "";
+}
+
+function normalizzaMovimenti(raw: unknown, ctx: ContestoEstrazione): ExtractedMovimento[] {
+  if (!Array.isArray(raw)) return [];
+
+  return raw
+    .map((riga) => {
+      const item = record(riga);
+      const { valore, fonte } = importoConFonte(item, ctx);
+      return {
+        data: dataValida(item.data),
+        descrizione: str(item.desc),
+        fornitore: str(item.forn),
+        categoria: categoriaValida(item.cat),
+        importo: valore,
+        fonte,
+      };
+    })
+    .filter((movimento) => movimento.importo !== 0);
+}
+
+// Con il dettaglio disponibile, i totali di categoria smettono di essere una
+// lettura a sé e diventano la somma delle righe: quadrano per costruzione
+// invece che per fortuna.
+function applicaTotaliDaiMovimenti(bilancio: ExtractedBilancio): void {
+  const perCategoria = new Map<string, ExtractedMovimento[]>();
+  for (const movimento of bilancio.movimenti) {
+    const righe = perCategoria.get(movimento.categoria) ?? [];
+    righe.push(movimento);
+    perCategoria.set(movimento.categoria, righe);
+  }
+
+  for (const categoria of CATEGORIE_SPESA) {
+    const righe = perCategoria.get(categoria);
+    if (!righe?.length) continue;
+
+    const campo = `spesa.${categoria}` as CampoImporto;
+    scriviImporto(bilancio, campo, arrotonda(righe.reduce((t, m) => t + m.importo, 0)));
+
+    // Questa somma non compare stampata da nessuna parte: la sua origine è il
+    // calcolo, e va detto invece di spacciarla per una riga letta nel documento.
+    const prima = righe[0];
+    bilancio.fonti[campo] = {
+      documento: prima.fonte?.documento ?? "",
+      pagina: prima.fonte?.pagina ?? 0,
+      testo: `somma di ${righe.length} ${righe.length === 1 ? "movimento" : "movimenti"}`,
+      verificata: false,
+      verificabile: false,
+    };
+  }
 }
 
 function normalizzaBilancio(raw: unknown, ctx: ContestoEstrazione): ExtractedBilancio {
@@ -462,6 +553,9 @@ function normalizzaBilancio(raw: unknown, ctx: ContestoEstrazione): ExtractedBil
     scriviImporto(bilancio, campo, valore);
     if (fonte) bilancio.fonti[campo] = fonte;
   }
+
+  bilancio.movimenti = normalizzaMovimenti(r.movimenti, ctx);
+  if (bilancio.movimenti.length) applicaTotaliDaiMovimenti(bilancio);
 
   return bilancio;
 }
@@ -544,7 +638,9 @@ export function normalizeExtraction(raw: unknown, ctx: ContestoEstrazione): Extr
       .map((b) => normalizzaBilancio(b, ctx))
       // Una voce senza anno e senza un solo importo è lo schema restituito
       // vuoto: tenerla produrrebbe una riga fantasma nello storico.
-      .filter((b) => b.anno > 0 || CAMPI_IMPORTO.some((c) => leggiImporto(b, c))),
+      .filter(
+        (b) => b.anno > 0 || b.movimenti.length || CAMPI_IMPORTO.some((c) => leggiImporto(b, c))
+      ),
     imp: mapImpianti((t) => imp[t] === true),
     impDet: normalizeImpDet(r.impDet),
     documenti: [],
@@ -729,6 +825,42 @@ function fondiCampo(
   dest.conflitti[campo] = conflitti;
 }
 
+// I blocchi di pagine si sovrappongono di proposito, quindi la stessa riga può
+// arrivare due volte: va tenuta una volta sola. La chiave non usa il testo
+// intero perché due letture della stessa riga possono troncarlo diversamente.
+function chiaveMovimento(movimento: ExtractedMovimento): string {
+  return [
+    movimento.categoria,
+    movimento.importo.toFixed(2),
+    movimento.fonte?.pagina ?? 0,
+    movimento.descrizione.slice(0, 40).toLowerCase().replace(/\s+/g, " ").trim(),
+  ].join("|");
+}
+
+function fondiMovimenti(
+  a: ExtractedMovimento[],
+  b: ExtractedMovimento[]
+): ExtractedMovimento[] {
+  const perChiave = new Map<string, ExtractedMovimento>();
+
+  for (const movimento of [...a, ...b]) {
+    const chiave = chiaveMovimento(movimento);
+    const esistente = perChiave.get(chiave);
+    // A parità di riga si tiene quella verificata sul documento, e fra due non
+    // verificate quella che almeno nomina un fornitore.
+    const migliore =
+      !esistente ||
+      (movimento.fonte?.verificata && !esistente.fonte?.verificata) ||
+      (Boolean(movimento.fornitore) && !esistente.fornitore);
+    if (migliore) perChiave.set(chiave, movimento);
+  }
+
+  return Array.from(perChiave.values()).sort((x, y) => {
+    if (x.data && y.data && x.data !== y.data) return x.data.localeCompare(y.data);
+    return y.importo - x.importo;
+  });
+}
+
 function mergeBilanci(a: ExtractedBilancio[], b: ExtractedBilancio[]): ExtractedBilancio[] {
   const byAnno = new Map<number, ExtractedBilancio>();
 
@@ -742,6 +874,11 @@ function mergeBilanci(a: ExtractedBilancio[], b: ExtractedBilancio[]): Extracted
     }
 
     for (const campo of CAMPI_IMPORTO) fondiCampo(existing, bilancio, campo);
+
+    existing.movimenti = fondiMovimenti(existing.movimenti, bilancio.movimenti);
+    // I totali di categoria seguono il dettaglio fuso, altrimenti resterebbero
+    // quelli del primo blocco e le righe aggiunte dagli altri non conterebbero.
+    if (existing.movimenti.length) applicaTotaliDaiMovimenti(existing);
 
     for (const campo of CAMPI_IMPORTO) {
       const altri = bilancio.conflitti[campo];

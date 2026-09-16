@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { CATEGORIE_SPESA_LABEL } from "@/lib/condotwin-calculations";
 import { CAMPI_IMPORTO } from "@/lib/anthropic";
-import type { FonteSalvata } from "@/lib/types";
+import { righeMovimenti } from "@/lib/movimenti";
+import type { ExtractedMovimento, FonteSalvata } from "@/lib/types";
 
 interface SaveBilancioBody {
   condominiumId: string;
@@ -16,6 +17,7 @@ interface SaveBilancioBody {
   // Provenienza per campo: "prev", "cons", "fondo", "totale",
   // "spesa.riscaldamento", ...
   fonti: Record<string, unknown>;
+  movimenti: ExtractedMovimento[];
   documentoPath: string | null;
 }
 
@@ -121,7 +123,15 @@ export async function POST(req: NextRequest) {
       })
       .filter((riga) => riga.importo > 0);
 
-    if (!prev && !cons && !fondo && !righeSpese.length) {
+    const movimenti = righeMovimenti(
+      condominiumId,
+      anno,
+      body.movimenti,
+      CATEGORIE_SPESA_LABEL,
+      () => documentoPath
+    );
+
+    if (!prev && !cons && !fondo && !righeSpese.length && !movimenti.length) {
       return NextResponse.json(
         { success: false, error: "Nessun dato da salvare per questo anno" },
         { status: 400 }
@@ -163,6 +173,20 @@ export async function POST(req: NextRequest) {
 
     if (righeSpese.length) {
       const { error } = await supabase.from("spese").insert(righeSpese);
+      if (error) throw error;
+    }
+
+    // Come per le spese, ricaricare lo stesso anno sostituisce il dettaglio
+    // invece di affiancarne una seconda copia.
+    const { error: delMovErr } = await supabase
+      .from("movimenti")
+      .delete()
+      .eq("condominium_id", condominiumId)
+      .eq("anno", anno);
+    if (delMovErr) throw delMovErr;
+
+    if (movimenti.length) {
+      const { error } = await supabase.from("movimenti").insert(movimenti);
       if (error) throw error;
     }
 

@@ -145,6 +145,7 @@ export function AggiungiBilancio({ condominiumId, anniEsistenti }: AggiungiBilan
           totale: bilancio.totale,
           spese: bilancio.spese,
           fonti: bilancio.fonti,
+          movimenti: bilancio.movimenti,
           documentoPath: documenti[0]?.path ?? null,
         }),
       });
@@ -262,6 +263,15 @@ export function AggiungiBilancio({ condominiumId, anniEsistenti }: AggiungiBilan
                 ))}
               </div>
             </div>
+
+            {bilancio.movimenti.length > 0 && (
+              <p className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
+                Estratte {bilancio.movimenti.length} righe di dettaglio, di cui{" "}
+                {bilancio.movimenti.filter((m) => m.fornitore).length} con un fornitore
+                riconosciuto. I totali qui sopra sono la loro somma; li trovi in Fornitori dopo il
+                salvataggio.
+              </p>
+            )}
 
             {note && (
               <p className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">{note}</p>
