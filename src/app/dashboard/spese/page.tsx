@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FonteLink } from "@/components/estrazione/FonteLink";
 import { CATEGORIE_SPESA_LABEL, formatEuro } from "@/lib/condotwin-calculations";
 import { ORIGINE_TOTALE_LABEL, esercizi } from "@/lib/bilancio";
+import type { DocumentoArchiviato } from "@/components/dashboard/AggiungiBilancio";
 import type { Bilancio, Spesa } from "@/lib/types";
 
 export default async function SpesePage({
@@ -37,6 +38,17 @@ export default async function SpesePage({
   // esercizio mostrare.
   const tuttiEsercizi = esercizi(bilanci, spese);
   const anni = tuttiEsercizi.map((e) => e.anno);
+
+  // I documenti caricati in passato restano in archivio: rileggerli non
+  // richiede di ricaricarli, e serve quando l'estrazione è migliorata.
+  const archiviati: DocumentoArchiviato[] = bilanci
+    .filter((b) => b.documento_path)
+    .map((b) => ({
+      anno: b.anno,
+      nome: nomeFile(b.documento_path as string),
+      path: b.documento_path as string,
+    }))
+    .sort((a, b) => b.anno - a.anno);
 
   const { anno: annoParam } = await searchParams;
   const annoRichiesto = Number(annoParam);
@@ -133,8 +145,22 @@ export default async function SpesePage({
       )}
 
       {role === "admin" && (
-        <AggiungiBilancio condominiumId={condominium.id} anniEsistenti={anni} />
+        <AggiungiBilancio
+          condominiumId={condominium.id}
+          anniEsistenti={anni}
+          archiviati={archiviati}
+        />
       )}
     </div>
   );
+}
+
+// I file in storage sono salvati come "<prefisso>/<utente>/<uuid>-<nome vero>":
+// all'amministratore va mostrato il nome che ha caricato lui. Il prefisso è un
+// UUID, che contiene trattini: va tolto per intero, non fino al primo trattino.
+const PREFISSO_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-/i;
+
+function nomeFile(path: string): string {
+  const base = path.split("/").pop() ?? path;
+  return base.replace(PREFISSO_UUID, "");
 }

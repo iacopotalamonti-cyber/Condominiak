@@ -74,6 +74,17 @@ stesso:
 - **conflitti** — quando due documenti danno importi diversi per lo stesso
   campo, il valore scartato resta visibile invece di essere scelto in silenzio.
 
+I fornitori hanno una loro anagrafica per condominio (`fornitori`), con il nome
+canonico e gli alias con cui compaiono nei documenti: senza, la stessa ditta
+scritta in due modi restava due fornitori e una correzione a mano si perdeva alla
+rilettura successiva. Ogni movimento conserva comunque il nome come stampato nel
+documento, che è provenienza.
+
+I documenti caricati restano in archivio, quindi una rilettura non richiede di
+ricaricarli: in *Analisi spese → Aggiungi un bilancio* ogni documento già
+presente ha il suo pulsante **Rianalizza**. Serve quando l'estrazione migliora e
+si vogliono rifare i conti sullo stesso documento.
+
 I rendiconti analitici elencano le singole righe, ciascuna con il proprio
 fornitore: quelle righe finiscono in `movimenti` e alimentano la pagina
 **Fornitori** (`/dashboard/fornitori`), che mostra quanto ha incassato ciascuno,

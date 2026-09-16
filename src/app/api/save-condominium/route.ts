@@ -11,6 +11,8 @@ import type {
 } from "@/lib/types";
 import { CATEGORIE_SPESA_LABEL } from "@/lib/condotwin-calculations";
 import { righeMovimenti } from "@/lib/movimenti";
+import { chiaveFornitore } from "@/lib/fornitori";
+import { risolviFornitori } from "@/lib/fornitori-server";
 
 interface SaveCondominiumBody {
   info: ExtractedInfo;
@@ -161,8 +163,21 @@ export async function POST(req: NextRequest) {
     }
 
     // 4b. movimenti: il dettaglio riga per riga di ciascun esercizio
+    const fornitori = await risolviFornitori(
+      supabase,
+      condominiumId,
+      esercizi.flatMap((b) => (b.movimenti ?? []).map((m) => m?.fornitore))
+    );
+
     const righeMov = esercizi.flatMap((b) =>
-      righeMovimenti(condominiumId, b.anno, b.movimenti, CATEGORIE_SPESA_LABEL, percorsoDi)
+      righeMovimenti(
+        condominiumId,
+        b.anno,
+        b.movimenti,
+        CATEGORIE_SPESA_LABEL,
+        percorsoDi,
+        (nome) => fornitori.get(chiaveFornitore(nome)) ?? null
+      )
     );
 
     if (righeMov.length) {

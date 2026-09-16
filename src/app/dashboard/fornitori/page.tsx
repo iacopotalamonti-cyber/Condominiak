@@ -9,8 +9,8 @@ import { FonteLink } from "@/components/estrazione/FonteLink";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CATEGORIE_SPESA_LABEL, formatEuro } from "@/lib/condotwin-calculations";
-import { SENZA_FORNITORE, perFornitore } from "@/lib/movimenti";
-import type { Movimento } from "@/lib/types";
+import { SENZA_FORNITORE, perFornitore } from "@/lib/fornitori";
+import type { Fornitore, Movimento } from "@/lib/types";
 
 const TUTTI = "tutti";
 
@@ -22,13 +22,17 @@ export default async function FornitoriPage({
   const { condominium } = await getDashboardContext();
   const supabase = await createClient();
 
-  const { data } = await supabase
-    .from("movimenti")
-    .select("*")
-    .eq("condominium_id", condominium.id)
-    .order("anno", { ascending: false });
+  const [{ data }, { data: datiFornitori }] = await Promise.all([
+    supabase
+      .from("movimenti")
+      .select("*")
+      .eq("condominium_id", condominium.id)
+      .order("anno", { ascending: false }),
+    supabase.from("fornitori").select("*").eq("condominium_id", condominium.id),
+  ]);
 
   const movimenti = (data ?? []) as Movimento[];
+  const anagrafica = (datiFornitori ?? []) as Fornitore[];
   const anni = Array.from(new Set(movimenti.map((m) => m.anno))).sort((a, b) => b - a);
 
   const { anno: annoParam } = await searchParams;
@@ -41,7 +45,7 @@ export default async function FornitoriPage({
   const mostraTutti = annoParam === TUTTI;
   const visibili = mostraTutti ? movimenti : movimenti.filter((m) => m.anno === selezione);
 
-  const fornitori = perFornitore(visibili);
+  const fornitori = perFornitore(visibili, anagrafica);
   const totale = fornitori.reduce((t, f) => t + f.totale, 0);
   const nonAttribuito = fornitori.find((f) => !f.attribuito);
   const conNome = fornitori.filter((f) => f.attribuito);
@@ -71,9 +75,11 @@ export default async function FornitoriPage({
           <CardContent className="flex flex-col items-start gap-2 py-10 text-sm text-muted-foreground">
             <p>Nessun movimento registrato.</p>
             <p>
-              Il dettaglio per fornitore si ricava dalle singole righe del rendiconto: ricarica un
-              bilancio da <strong>Analisi spese → Aggiungi un bilancio</strong> e, se il documento è
-              analitico, le righe verranno estratte insieme ai totali.
+              Il dettaglio per fornitore si ricava dalle singole righe del rendiconto. I documenti
+              già caricati sono ancora in archivio: vai in{" "}
+              <strong>Analisi spese → Aggiungi un bilancio</strong> e usa{" "}
+              <strong>Rianalizza</strong> sul documento dell&apos;anno che ti interessa — non serve
+              ricaricarlo.
             </p>
           </CardContent>
         </Card>
@@ -105,7 +111,7 @@ export default async function FornitoriPage({
               <CardTitle className="text-base">Spesa per fornitore</CardTitle>
             </CardHeader>
             <CardContent>
-              <FornitoriChart voci={fornitori.map((f) => ({ fornitore: f.fornitore, totale: f.totale }))} />
+              <FornitoriChart voci={fornitori.map((f) => ({ fornitore: f.nome, totale: f.totale }))} />
             </CardContent>
           </Card>
 
@@ -115,11 +121,11 @@ export default async function FornitoriPage({
             </CardHeader>
             <CardContent className="flex flex-col gap-2">
               {fornitori.map((f) => (
-                <details key={f.fornitore} className="rounded-md border px-3 py-2">
+                <details key={f.id ?? f.nome} className="rounded-md border px-3 py-2">
                   <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 text-sm">
                     <span className="flex flex-wrap items-center gap-2">
                       <span className={f.attribuito ? "font-medium" : "font-medium text-warning"}>
-                        {f.fornitore}
+                        {f.nome}
                       </span>
                       {f.categorie.map((c) => (
                         <Badge key={c} variant="outline" className="text-xs font-normal">

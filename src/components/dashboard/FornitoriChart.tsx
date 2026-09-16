@@ -3,7 +3,7 @@
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { formatEuro } from "@/lib/condotwin-calculations";
-import { SENZA_FORNITORE } from "@/lib/movimenti";
+import { SENZA_FORNITORE } from "@/lib/fornitori";
 
 interface Voce {
   fornitore: string;

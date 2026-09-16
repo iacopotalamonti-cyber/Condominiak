@@ -88,6 +88,18 @@ export interface Spesa {
   note: string | null;
 }
 
+// Il fornitore come entità del condominio, non come stringa ripetuta su ogni
+// riga: qui vive il nome canonico, e gli alias con cui compare nei documenti.
+export interface Fornitore {
+  id: string;
+  created_at: string;
+  condominium_id: string;
+  nome: string;
+  alias: string[];
+  piva: string | null;
+  note: string | null;
+}
+
 // Una riga del rendiconto analitico: la spesa come è stata realmente sostenuta,
 // con il fornitore che l'ha emessa.
 export interface Movimento {
@@ -100,6 +112,8 @@ export interface Movimento {
   fornitore: string | null;
   categoria: string;
   importo: number;
+  // Collegamento all'anagrafica; null finché non è stato risolto.
+  fornitore_id: string | null;
   fonte_documento: string | null;
   fonte_pagina: number | null;
   fonte_testo: string | null;

@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2, RefreshCw, Sparkles } from "lucide-react";
 
 import {
   TIPI_ACCETTATI,
@@ -30,15 +30,28 @@ import { ControlliBilancio } from "@/components/estrazione/ControlliBilancio";
 import { formatEuro } from "@/lib/condotwin-calculations";
 import type { CampoImporto as CampoImportoKey, ExtractedBilancio, UploadedFile } from "@/lib/types";
 
+// Un documento già caricato in passato e ancora in archivio: si rianalizza
+// senza doverlo ricaricare, perché il file ce l'abbiamo già.
+export interface DocumentoArchiviato {
+  anno: number;
+  nome: string;
+  path: string;
+}
+
 interface AggiungiBilancioProps {
   condominiumId: string;
   anniEsistenti: number[];
+  archiviati: DocumentoArchiviato[];
 }
 
 const CAMPI_TOTALI: CampoImportoKey[] = ["prev", "cons", "fondo", "totale"];
 const CAMPI_SPESA = CAMPI_IMPORTO.filter((c) => c.startsWith("spesa."));
 
-export function AggiungiBilancio({ condominiumId, anniEsistenti }: AggiungiBilancioProps) {
+export function AggiungiBilancio({
+  condominiumId,
+  anniEsistenti,
+  archiviati,
+}: AggiungiBilancioProps) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -81,16 +94,24 @@ export function AggiungiBilancio({ condominiumId, anniEsistenti }: AggiungiBilan
     });
   }
 
-  async function analizza() {
-    if (!file) return;
+  async function analizza(archiviato?: DocumentoArchiviato) {
+    if (!archiviato && !file) return;
     setLavorando(true);
     setErrore(null);
     setEsito(null);
-    setStato("Caricamento del documento…");
 
     try {
-      const caricati = await caricaSuStorage([file]);
-      setStato("Analisi AI in corso…");
+      // Un documento già in archivio non va ricaricato: alla funzione di
+      // estrazione serve solo il suo percorso, che abbiamo già.
+      let caricati: UploadedFile[];
+      if (archiviato) {
+        setStato(`Rilettura di ${archiviato.nome}…`);
+        caricati = [{ name: archiviato.nome, type: "application/pdf", path: archiviato.path }];
+      } else {
+        setStato("Caricamento del documento…");
+        caricati = await caricaSuStorage([file as File]);
+        setStato("Analisi AI in corso…");
+      }
 
       const risultato = await analizzaDocumenti(caricati, "bilancio", setStato);
       const estratto = risultato.bilanci[0] ?? bilancioVuoto();
@@ -195,12 +216,37 @@ export function AggiungiBilancio({ condominiumId, anniEsistenti }: AggiungiBilan
                   onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                 />
               </div>
-              <Button onClick={analizza} disabled={!file || lavorando}>
+              <Button onClick={() => analizza()} disabled={!file || lavorando}>
                 {lavorando ? <Loader2 className="animate-spin" /> : <Sparkles />}
                 Analizza con AI
               </Button>
             </div>
             {lavorando && stato && <p className="text-sm text-muted-foreground">{stato}</p>}
+
+            {archiviati.length > 0 && (
+              <div className="flex flex-col gap-2 border-t pt-4">
+                <p className="text-sm font-medium">Documenti già in archivio</p>
+                <p className="text-sm text-muted-foreground">
+                  Questi li abbiamo già: rileggerli non richiede di ricaricarli. Serve quando
+                  l&apos;estrazione è migliorata e vuoi rifare i conti sullo stesso documento.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {archiviati.map((doc) => (
+                    <Button
+                      key={doc.path}
+                      variant="outline"
+                      size="sm"
+                      disabled={lavorando}
+                      onClick={() => analizza(doc)}
+                      title={doc.nome}
+                    >
+                      <RefreshCw />
+                      Rianalizza {doc.anno}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
           </>
         ) : (
           <>

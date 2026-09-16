@@ -4,6 +4,8 @@ import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { CATEGORIE_SPESA_LABEL } from "@/lib/condotwin-calculations";
 import { CAMPI_IMPORTO } from "@/lib/anthropic";
 import { righeMovimenti } from "@/lib/movimenti";
+import { chiaveFornitore } from "@/lib/fornitori";
+import { risolviFornitori } from "@/lib/fornitori-server";
 import type { ExtractedMovimento, FonteSalvata } from "@/lib/types";
 
 interface SaveBilancioBody {
@@ -123,12 +125,19 @@ export async function POST(req: NextRequest) {
       })
       .filter((riga) => riga.importo > 0);
 
+    const fornitori = await risolviFornitori(
+      supabase,
+      condominiumId,
+      (body.movimenti ?? []).map((m) => m?.fornitore)
+    );
+
     const movimenti = righeMovimenti(
       condominiumId,
       anno,
       body.movimenti,
       CATEGORIE_SPESA_LABEL,
-      () => documentoPath
+      () => documentoPath,
+      (nome) => fornitori.get(chiaveFornitore(nome)) ?? null
     );
 
     if (!prev && !cons && !fondo && !righeSpese.length && !movimenti.length) {
