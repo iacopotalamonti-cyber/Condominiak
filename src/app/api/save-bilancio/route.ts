@@ -39,7 +39,13 @@ function fonte(value: unknown): FonteSalvata | null {
   const testo = typeof r.testo === "string" ? r.testo.slice(0, MAX_TESTO_FONTE) : "";
 
   if (!documento && !pagina && !testo) return null;
-  return { documento, pagina, testo, verificata: r.verificata === true };
+  return {
+    documento,
+    pagina,
+    testo,
+    verificata: r.verificata === true,
+    verificabile: r.verificabile === true,
+  };
 }
 
 function fontiValide(raw: unknown): Record<string, FonteSalvata> {
@@ -109,6 +115,7 @@ export async function POST(req: NextRequest) {
           fonte_pagina: origine?.pagina || null,
           fonte_testo: origine?.testo || null,
           fonte_verificata: origine?.verificata ?? false,
+          fonte_verificabile: origine?.verificabile ?? false,
           documento_path: documentoPath,
         };
       })

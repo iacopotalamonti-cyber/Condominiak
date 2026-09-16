@@ -288,15 +288,20 @@ function eur(value: number): string {
 }
 
 // -----------------------------------------------------------------------
-// Citazioni: la verifica che il numero esista davvero nel documento
+// Verifica: il numero esiste davvero in quella pagina?
 // -----------------------------------------------------------------------
 
-// Un passaggio che l'API ha estratto dal PDF. A differenza del resto della
-// risposta non è scritto dal modello, quindi non può essere inventato.
-export interface Citazione {
-  pagina: number;
-  testo: string;
-}
+// La prima versione si appoggiava alle citazioni dell'API. Non funzionava, e il
+// motivo sta nella documentazione: "citations require interleaving citation
+// blocks with text output". Le citazioni si agganciano alla prosa che il modello
+// scrive, ma qui gli si chiede di restituire SOLO JSON — non c'è testo in cui
+// interfogliarle, e infatti non ne arrivava nessuna. Inoltre un PDF scansionato
+// non è citabile affatto.
+//
+// La verifica quindi non passa più da ciò che il modello decide di scrivere: si
+// estrae il testo del PDF per pagina e si controlla noi che le cifre siano dove
+// il modello dice che sono. Se il PDF non ha un livello di testo (scansione) la
+// verifica non è possibile, ed è un esito diverso da "non trovato".
 
 export interface ContestoEstrazione {
   // Nome del file da cui viene questo blocco.
@@ -304,33 +309,47 @@ export interface ContestoEstrazione {
   // Pagine che precedono il blocco nel documento intero: il modello numera le
   // pagine a partire da quelle che riceve, non da quelle del PDF originale.
   offsetPagina: number;
-  citazioni: Citazione[];
+  // Testo del documento pagina per pagina, indicizzato sul numero di pagina
+  // assoluto (1-based). Vuota per le immagini e per i PDF senza testo.
+  testoPagine: Map<number, string>;
 }
 
-function soleCifre(testo: string): string {
+export function soleCifre(testo: string): string {
   return testo.replace(/[^\d]/g, "");
 }
 
 // Le cifre dell'importo come comparirebbero stampate, separatori esclusi:
 // 12345.67 -> "1234567", 12345 -> "12345".
-function cifreImporto(valore: number): string {
+export function cifreImporto(valore: number): string {
   const assoluto = Math.abs(valore);
   const arrotondato = Math.round(assoluto * 100) / 100;
-  const testo = Number.isInteger(arrotondato)
-    ? String(arrotondato)
-    : arrotondato.toFixed(2);
+  const testo = Number.isInteger(arrotondato) ? String(arrotondato) : arrotondato.toFixed(2);
   return soleCifre(testo);
 }
 
-function verificaFonte(fonte: Fonte, valore: number, citazioni: Citazione[]): boolean {
-  if (!citazioni.length || !valore) return false;
-  const cifre = cifreImporto(valore);
-  if (cifre.length < 2) return false;
+export type EsitoVerifica = "verificata" | "non_trovata" | "non_verificabile";
 
-  return citazioni.some((c) => {
-    if (fonte.pagina && c.pagina && c.pagina !== fonte.pagina) return false;
-    return soleCifre(c.testo).includes(cifre);
-  });
+// Si cerca sulla pagina dichiarata e su quelle adiacenti: una tabella che
+// prosegue oltre il salto pagina fa sbagliare il modello di una pagina, e in
+// quel caso il numero è comunque quello giusto. Oltre non si va, perché un
+// importo come 1.250,00 ricorre e allargando la ricerca si verificherebbe
+// qualsiasi cosa.
+export function verificaImporto(
+  valore: number,
+  pagina: number,
+  testoPagine: Map<number, string>
+): EsitoVerifica {
+  if (!valore || !pagina || !testoPagine.size) return "non_verificabile";
+
+  const cifre = cifreImporto(valore);
+  if (cifre.length < 3) return "non_verificabile";
+
+  const vicine = [pagina, pagina - 1, pagina + 1]
+    .map((p) => testoPagine.get(p))
+    .filter((testo): testo is string => Boolean(testo && testo.trim()));
+
+  if (!vicine.length) return "non_verificabile";
+  return vicine.some((testo) => soleCifre(testo).includes(cifre)) ? "verificata" : "non_trovata";
 }
 
 // -----------------------------------------------------------------------
@@ -404,13 +423,16 @@ function importoConFonte(
   if (!valore) return { valore: 0, fonte: null };
 
   const paginaBlocco = Math.max(0, Math.round(num(r.pag)));
+  const pagina = paginaBlocco ? paginaBlocco + ctx.offsetPagina : 0;
+  const esito = verificaImporto(valore, pagina, ctx.testoPagine);
+
   const fonte: Fonte = {
     documento: ctx.documento,
-    pagina: paginaBlocco ? paginaBlocco + ctx.offsetPagina : 0,
+    pagina,
     testo: str(r.txt),
-    verificata: false,
+    verificata: esito === "verificata",
+    verificabile: esito !== "non_verificabile",
   };
-  fonte.verificata = verificaFonte(fonte, valore, ctx.citazioni);
 
   return { valore, fonte };
 }

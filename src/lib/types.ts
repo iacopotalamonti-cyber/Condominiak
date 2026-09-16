@@ -57,6 +57,7 @@ export interface FonteSalvata {
   pagina: number;
   testo: string;
   verificata: boolean;
+  verificabile: boolean;
 }
 
 export type CategoriaSpesa =
@@ -82,6 +83,7 @@ export interface Spesa {
   fonte_pagina: number | null;
   fonte_testo: string | null;
   fonte_verificata: boolean;
+  fonte_verificabile: boolean;
   documento_path: string | null;
   note: string | null;
 }
@@ -200,9 +202,14 @@ export interface Fonte {
   pagina: number;
   // La riga copiata alla lettera dal documento, non una parafrasi.
   testo: string;
-  // true solo se il testo compare in una citazione restituita dall'API, che
-  // estrae il passaggio dal PDF invece di lasciarlo generare al modello.
+  // true se le cifre dell'importo sono state ritrovate nel testo di quella
+  // pagina del PDF, estratto da noi: è un controllo sul documento, non una
+  // dichiarazione del modello.
   verificata: boolean;
+  // false quando il controllo non si è potuto fare — PDF scansionato senza
+  // livello di testo, immagine, o pagina non indicata. Serve a distinguere
+  // "ho controllato e non c'è" da "non ho potuto controllare".
+  verificabile: boolean;
 }
 
 // I campi importo di un bilancio, nella forma usata come chiave in `fonti` e

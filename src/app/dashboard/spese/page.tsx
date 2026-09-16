@@ -106,6 +106,7 @@ export default async function SpesePage({
                       pagina={s.fonte_pagina}
                       testo={s.fonte_testo}
                       verificata={s.fonte_verificata}
+                      verificabile={s.fonte_verificabile}
                       percorso={s.documento_path}
                     />
                   </div>

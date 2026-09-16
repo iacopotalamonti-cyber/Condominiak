@@ -30,7 +30,13 @@ function fonteValida(value: Fonte | undefined): Fonte | null {
   const pagina = Number.isFinite(Number(value.pagina)) ? Math.max(0, Math.round(Number(value.pagina))) : 0;
   const testo = typeof value.testo === "string" ? value.testo.slice(0, MAX_TESTO_FONTE) : "";
   if (!documento && !pagina && !testo) return null;
-  return { documento, pagina, testo, verificata: value.verificata === true };
+  return {
+    documento,
+    pagina,
+    testo,
+    verificata: value.verificata === true,
+    verificabile: value.verificabile === true,
+  };
 }
 
 export async function POST(req: NextRequest) {
@@ -142,6 +148,7 @@ export async function POST(req: NextRequest) {
             fonte_pagina: fonte?.pagina || null,
             fonte_testo: fonte?.testo || null,
             fonte_verificata: fonte?.verificata ?? false,
+            fonte_verificabile: fonte?.verificabile ?? false,
             documento_path: fonte ? percorsoDi(fonte.documento) : null,
           };
         })

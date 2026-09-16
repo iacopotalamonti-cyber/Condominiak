@@ -63,8 +63,12 @@ dopo l'analisi.
 Tre controlli girano fuori dal modello, perché un modello non può verificare se
 stesso:
 
-- **citazioni** — l'API restituisce i passaggi estratti dal PDF, non generati:
-  un importo che vi si ritrova viene marcato come verificato;
+- **verifica sul documento** — il testo del PDF viene estratto pagina per pagina
+  e l'importo si considera verificato solo se le sue cifre sono davvero in quella
+  pagina. Tre esiti distinti: verificato, non trovato nella pagina (un errore da
+  controllare), non verificabile (scansione senza testo). La prima versione si
+  appoggiava alle citazioni dell'API, ma quelle si agganciano alla prosa che il
+  modello scrive e qui gli si chiede solo JSON: non ne arrivava nessuna;
 - **quadratura** — la somma delle voci di spesa viene confrontata con il totale
   stampato nel documento, e lo scarto è mostrato in `/dashboard/bilanci`;
 - **conflitti** — quando due documenti danno importi diversi per lo stesso

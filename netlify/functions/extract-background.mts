@@ -3,6 +3,7 @@ import { getStore } from "@netlify/blobs";
 import { createClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
 import { PDFDocument } from "pdf-lib";
+import { extractText, getDocumentProxy } from "unpdf";
 
 import "../../src/lib/websocket-polyfill";
 import {
@@ -11,7 +12,6 @@ import {
   EXTRACTION_MODEL,
   MAX_PAGES_PER_REQUEST,
   PAGINE_SOVRAPPOSTE,
-  type Citazione,
   type ContestoEstrazione,
   type ExtractionMode,
   controlliBilancio,
@@ -149,24 +149,26 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-// Le citazioni sono passaggi che l'API estrae dal PDF, non testo generato dal
-// modello: sono la sola parte della risposta che non può essere inventata, e
-// servono a confermare che un importo esiste davvero in quella pagina.
-function citazioniDi(message: Anthropic.Message, offset: number): Citazione[] {
-  const out: Citazione[] = [];
+// Il testo del PDF pagina per pagina, numerate come nel documento originale.
+// È contro questo che si verifica ogni importo: il modello dice dove ha letto
+// un numero, e qui si controlla che in quella pagina ci sia davvero.
+// Un PDF scansionato non ha livello di testo e restituisce pagine vuote: in quel
+// caso la verifica risulta impossibile, che è un esito diverso da "non trovato".
+async function testoPerPagina(data: Uint8Array): Promise<Map<number, string>> {
+  const pagine = new Map<number, string>();
 
-  for (const block of message.content) {
-    if (block.type !== "text" || !block.citations) continue;
-    for (const citazione of block.citations) {
-      if (citazione.type === "page_location") {
-        out.push({ pagina: citazione.start_page_number + offset, testo: citazione.cited_text });
-      } else if ("cited_text" in citazione) {
-        out.push({ pagina: 0, testo: citazione.cited_text });
-      }
-    }
+  try {
+    const pdf = await getDocumentProxy(data);
+    const { text } = await extractText(pdf, { mergePages: false });
+    text.forEach((testo, indice) => {
+      if (testo && testo.trim()) pagine.set(indice + 1, testo);
+    });
+  } catch (error) {
+    // Senza testo si perde solo la verifica, non l'estrazione.
+    console.warn("Estrazione del testo fallita, importi non verificabili:", error);
   }
 
-  return out;
+  return pagine;
 }
 
 async function callModel(
@@ -174,7 +176,8 @@ async function callModel(
   piece: Piece,
   index: number,
   total: number,
-  mode: ExtractionMode
+  mode: ExtractionMode,
+  testoPagine: Map<number, string>
 ): Promise<ExtractionResult> {
   const base64 = Buffer.from(piece.data).toString("base64");
   const block: Anthropic.ContentBlockParam =
@@ -183,8 +186,6 @@ async function callModel(
           type: "document",
           source: { type: "base64", media_type: "application/pdf", data: base64 },
           title: piece.name,
-          // Le immagini non supportano le citazioni: solo i PDF.
-          citations: { enabled: true },
         }
       : {
           type: "image",
@@ -228,7 +229,7 @@ async function callModel(
     // Il modello numera le pagine a partire da quelle che riceve: senza
     // l'offset la fonte rimanderebbe alla pagina sbagliata del PDF.
     offsetPagina: piece.offset,
-    citazioni: citazioniDi(message, piece.offset),
+    testoPagine,
   };
 
   return normalizeExtraction(parseExtractionOutput(text), ctx);
@@ -242,10 +243,11 @@ async function analyzePiece(
   piece: Piece,
   index: number,
   total: number,
-  mode: ExtractionMode
+  mode: ExtractionMode,
+  testoPagine: Map<number, string>
 ): Promise<ExtractionResult[]> {
   try {
-    return [await callModel(anthropic, piece, index, total, mode)];
+    return [await callModel(anthropic, piece, index, total, mode, testoPagine)];
   } catch (error) {
     if (!isTooLarge(error)) throw error;
 
@@ -255,7 +257,7 @@ async function analyzePiece(
     console.log(`Blocco oltre il limite di token, lo divido: ${label(piece)}`);
     const results: ExtractionResult[] = [];
     for (const half of halves) {
-      results.push(...(await analyzePiece(anthropic, half, index, total, mode)));
+      results.push(...(await analyzePiece(anthropic, half, index, total, mode, testoPagine)));
     }
     return results;
   }
@@ -282,7 +284,7 @@ function paginePerDocumento(bilancio: ExtractedBilancio): Map<string, number[]> 
 async function rileggiBilancio(
   anthropic: Anthropic,
   bilancio: ExtractedBilancio,
-  documenti: Map<string, { doc: PDFDocument; pagine: number }>,
+  documenti: Map<string, { doc: PDFDocument; pagine: number; testo: Map<number, string> }>,
   mode: ExtractionMode
 ): Promise<ExtractionResult | null> {
   for (const [nome, pagine] of paginePerDocumento(bilancio)) {
@@ -297,7 +299,7 @@ async function rileggiBilancio(
 
     const piece = await pdfSlice(sorgente.doc, nome, 0, da, a);
     console.log(`Rilettura mirata di ${label(piece)} per l'esercizio ${bilancio.anno}`);
-    return await callModel(anthropic, piece, 1, 1, mode);
+    return await callModel(anthropic, piece, 1, 1, mode, sorgente.testo);
   }
 
   return null;
@@ -362,8 +364,10 @@ export default async (req: Request) => {
     });
 
     const pieces: Piece[] = [];
-    // I PDF aperti restano a disposizione per le eventuali riletture mirate.
-    const sorgenti = new Map<string, { doc: PDFDocument; pagine: number }>();
+    // I PDF aperti e il loro testo restano a disposizione per la verifica degli
+    // importi e per le eventuali riletture mirate.
+    const sorgenti = new Map<string, { doc: PDFDocument; pagine: number; testo: Map<number, string> }>();
+    const testoDocumenti = new Map<string, Map<number, string>>();
 
     for (const file of files) {
       const { data, error } = await supabase.storage.from(BUCKET).download(file.path);
@@ -374,9 +378,14 @@ export default async (req: Request) => {
       pieces.push(...(await piecesFor(file, bytes)));
 
       if (file.type === "application/pdf") {
+        const testo = await testoPerPagina(bytes);
+        testoDocumenti.set(file.name, testo);
+        if (!testo.size) {
+          console.warn(`${file.name} non ha un livello di testo: importi non verificabili`);
+        }
         try {
           const doc = await PDFDocument.load(bytes, { ignoreEncryption: true });
-          sorgenti.set(file.name, { doc, pagine: doc.getPageCount() });
+          sorgenti.set(file.name, { doc, pagine: doc.getPageCount(), testo });
         } catch {
           // Già segnalato da piecesFor: senza sorgente si salta la rilettura.
         }
@@ -400,7 +409,16 @@ export default async (req: Request) => {
       });
 
       try {
-        results.push(...(await analyzePiece(anthropic, piece, index + 1, pieces.length, mode)));
+        results.push(
+          ...(await analyzePiece(
+            anthropic,
+            piece,
+            index + 1,
+            pieces.length,
+            mode,
+            testoDocumenti.get(piece.name) ?? new Map()
+          ))
+        );
       } catch (error) {
         // Un documento illeggibile non deve buttare via quelli già estratti.
         console.error(`Estrazione fallita per ${label(piece)}:`, error);

@@ -109,6 +109,7 @@ export default async function BilanciPage() {
                               pagina={fonteDi(b, "prev")?.pagina ?? null}
                               testo={fonteDi(b, "prev")?.testo ?? null}
                               verificata={fonteDi(b, "prev")?.verificata ?? false}
+                              verificabile={fonteDi(b, "prev")?.verificabile ?? false}
                               percorso={b.documento_path}
                             />
                           </div>
@@ -120,6 +121,7 @@ export default async function BilanciPage() {
                               pagina={fonteDi(b, "cons")?.pagina ?? null}
                               testo={fonteDi(b, "cons")?.testo ?? null}
                               verificata={fonteDi(b, "cons")?.verificata ?? false}
+                              verificabile={fonteDi(b, "cons")?.verificabile ?? false}
                               percorso={b.documento_path}
                             />
                           </div>

@@ -34,6 +34,7 @@ function spesa(anno: number, categoria: string, importo: number): Spesa {
     fonte_pagina: null,
     fonte_testo: null,
     fonte_verificata: false,
+    fonte_verificabile: false,
     documento_path: null,
     note: null,
   };

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { BadgeCheck, FileText, TriangleAlert } from "lucide-react";
+import { BadgeCheck, CircleHelp, FileText, TriangleAlert } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -51,15 +51,31 @@ export function CampoImporto({
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between gap-2">
         <Label htmlFor={id}>{etichetta}</Label>
-        {fonte?.verificata && (
+        {fonte?.verificata ? (
           <span
             className="flex items-center gap-1 text-xs text-success"
-            title="L'importo è stato ritrovato nel testo estratto dal PDF"
+            title="Le cifre sono state ritrovate nel testo di quella pagina del PDF"
           >
             <BadgeCheck className="size-3.5" />
             verificato
           </span>
-        )}
+        ) : fonte?.verificabile ? (
+          <span
+            className="flex items-center gap-1 text-xs text-destructive"
+            title="La pagina del PDF è leggibile ma non contiene questo importo: controllalo"
+          >
+            <TriangleAlert className="size-3.5" />
+            non trovato nella pagina
+          </span>
+        ) : fonte?.pagina ? (
+          <span
+            className="flex items-center gap-1 text-xs text-muted-foreground"
+            title="Il documento non ha testo selezionabile (scansione): la verifica automatica non è possibile"
+          >
+            <CircleHelp className="size-3.5" />
+            non verificabile
+          </span>
+        ) : null}
       </div>
 
       <Input

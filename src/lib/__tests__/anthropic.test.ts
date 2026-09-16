@@ -11,10 +11,15 @@ import {
   num,
   scriviImporto,
   sommaSpese,
+  verificaImporto,
   type ContestoEstrazione,
 } from "../anthropic.ts";
 
-const ctx: ContestoEstrazione = { documento: "bilancio.pdf", offsetPagina: 0, citazioni: [] };
+const ctx: ContestoEstrazione = {
+  documento: "bilancio.pdf",
+  offsetPagina: 0,
+  testoPagine: new Map(),
+};
 
 // Il caso che faceva finire in dashboard numeri assenti da qualunque
 // documento: il punto delle migliaia letto come separatore decimale.
@@ -75,20 +80,61 @@ test("le pagine dei blocchi sono riportate al documento intero", () => {
   assert.equal(result.bilanci[0].fonti.cons?.pagina, 22);
 });
 
-test("una citazione dell'API marca l'importo come verificato", () => {
+// La verifica confronta l'importo con il testo vero della pagina, estratto dal
+// PDF da noi: non dipende da cosa il modello sceglie di scrivere.
+test("l'importo ritrovato nella pagina dichiarata è verificato", () => {
   const result = normalizeExtraction(
     { bilanci: [{ anno: 2023, cons: { v: 48500, pag: 4, txt: "TOTALE 48.500,00" } }] },
-    { ...ctx, citazioni: [{ pagina: 4, testo: "TOTALE CONSUNTIVO 48.500,00 euro" }] }
+    { ...ctx, testoPagine: new Map([[4, "TOTALE CONSUNTIVO 48.500,00 euro"]]) }
   );
   assert.equal(result.bilanci[0].fonti.cons?.verificata, true);
+  assert.equal(result.bilanci[0].fonti.cons?.verificabile, true);
 });
 
-test("senza citazione corrispondente l'importo resta non verificato", () => {
+test("un importo assente dalla pagina dichiarata non è verificato", () => {
   const result = normalizeExtraction(
     { bilanci: [{ anno: 2023, cons: { v: 48500, pag: 4, txt: "TOTALE 48.500,00" } }] },
-    { ...ctx, citazioni: [{ pagina: 4, testo: "TOTALE CONSUNTIVO 39.900,00 euro" }] }
+    { ...ctx, testoPagine: new Map([[4, "TOTALE CONSUNTIVO 39.900,00 euro"]]) }
   );
   assert.equal(result.bilanci[0].fonti.cons?.verificata, false);
+  assert.equal(result.bilanci[0].fonti.cons?.verificabile, true);
+});
+
+// Una scansione non ha testo: "non ho potuto controllare" non deve assomigliare
+// a "ho controllato e non c'è".
+test("senza testo nel PDF la verifica risulta impossibile, non fallita", () => {
+  const result = normalizeExtraction(
+    { bilanci: [{ anno: 2023, cons: { v: 48500, pag: 4, txt: "TOTALE 48.500,00" } }] },
+    ctx
+  );
+  assert.equal(result.bilanci[0].fonti.cons?.verificata, false);
+  assert.equal(result.bilanci[0].fonti.cons?.verificabile, false);
+});
+
+// Una tabella che prosegue oltre il salto pagina fa sbagliare il modello di una
+// pagina: in quel caso il numero è comunque quello giusto. Due pagine di scarto
+// no, altrimenti si finirebbe per verificare qualsiasi cosa.
+test("la verifica tollera uno scarto di una pagina, non di più", () => {
+  const pagine = new Map([
+    [4, "intestazione"],
+    [5, "segue: Riscaldamento 6.986,56"],
+    [6, "altre voci"],
+    [7, "ancora altre voci"],
+  ]);
+
+  assert.equal(verificaImporto(6986.56, 4, pagine), "verificata");
+  assert.equal(verificaImporto(6986.56, 5, pagine), "verificata");
+  assert.equal(verificaImporto(6986.56, 6, pagine), "verificata");
+  assert.equal(verificaImporto(6986.56, 7, pagine), "non_trovata");
+});
+
+// Pagina dichiarata senza testo estraibile (inserto scansionato): non si è
+// potuto controllare, e non è la stessa cosa di un importo assente.
+test("una pagina priva di testo rende la verifica impossibile", () => {
+  const pagine = new Map([[5, "Riscaldamento 6.986,56"]]);
+  assert.equal(verificaImporto(6986.56, 9, pagine), "non_verificabile");
+  assert.equal(verificaImporto(6986.56, 0, pagine), "non_verificabile");
+  assert.equal(verificaImporto(6986.56, 5, new Map()), "non_verificabile");
 });
 
 // Lo schema non suggerisce più cinque anni: se il documento ne contiene uno,
@@ -153,7 +199,7 @@ test("una lettura verificata vince su una non verificata", () => {
   );
   const b = normalizeExtraction(
     { bilanci: [{ anno: 2023, cons: { v: 48500, pag: 4, txt: "Totale 48.500,00" } }] },
-    { ...ctx, citazioni: [{ pagina: 4, testo: "TOTALE CONSUNTIVO 48.500,00" }] }
+    { ...ctx, testoPagine: new Map([[4, "TOTALE CONSUNTIVO 48.500,00"]]) }
   );
 
   const merged = mergeExtractions([a, b]);
