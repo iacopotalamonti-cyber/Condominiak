@@ -54,9 +54,13 @@ Migrazioni applicate, in ordine (`supabase/migrations/`):
 3. `20260916100000_movimenti.sql`
 4. `20260916110000_anagrafica_fornitori.sql`
 
-Lo schema iniziale **non è versionato nel repo**: è stato applicato a mano sul
-progetto Supabase. Ricostruire l'ambiente da zero oggi non è possibile a partire
-dal solo repository. Vedi `ROADMAP.md` → Fase 0.
+Lo schema completo è in `supabase/migrations/00000000000000_schema_iniziale.sql`,
+ricostruito dal database di produzione il 19/09/2026: tabelle, indici, policy RLS
+e bucket storage. Su un database vuoto va eseguito per primo; le quattro
+migrazioni datate che lo seguono diventano innocue.
+
+Progetto Supabase di produzione: `mqmedyjwjzxwuxqgyahy` (organizzazione
+"Condominial", regione eu-west-1).
 
 ## Cosa manca per poter chiamare "produzione" la produzione
 
@@ -76,7 +80,14 @@ sono affatto:
   un unico progetto Supabase. Una migrazione sbagliata tocca i dati veri.
 - **Nessun tracciamento errori**: se una funzione di estrazione fallisce per un
   utente, lo sappiamo solo se ce lo racconta.
-- **Nessun backup dichiarato** del database oltre a quello di default di Supabase.
+- **Nessun backup, punto.** La dashboard Supabase riporta "No backups", e il
+  database contiene già dati reali (168 pagamenti, 67 movimenti, 21 fornitori).
+  Sul piano Free i backup automatici non ci sono: oggi un errore su una tabella
+  non è recuperabile.
+- **L'invito ai condòmini non collega nessuno** (verificato): la policy
+  `resident_access` su `unita` impedisce a un invitato di rivendicare la propria
+  unità, e l'update client-side fallisce in silenzio. Vedi `SERVIZI.md` → "Come
+  si entra", punto 4.
 - **CORS aperto** su tutte le API (`netlify.toml`: `Access-Control-Allow-Origin = "*"`).
 - **Nessun pagamento, nessuna fatturazione, nessun contratto**: l'app non ha
   ancora un modo per incassare.

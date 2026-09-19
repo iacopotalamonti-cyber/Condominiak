@@ -15,12 +15,12 @@ Nessuna funzionalità nuova. Una settimana scarsa di lavoro che poi si ripaga a
 ogni rilascio successivo.
 
 - [x] `.env.local.example` nel repo, con tutte le variabili e un commento per ciascuna
-- [ ] Schema iniziale del database esportato in `supabase/migrations/00000000000000_schema_iniziale.sql`, così l'ambiente si ricostruisce da zero
+- [x] Schema iniziale del database esportato in `supabase/migrations/00000000000000_schema_iniziale.sql`, così l'ambiente si ricostruisce da zero
 - [x] CI su GitHub Actions: `lint` + `test` + `build` a ogni push e PR (il lint falliva già: sistemato)
 - [ ] Ambiente di staging: secondo progetto Supabase + deploy preview Netlify collegati
 - [ ] Tracciamento errori (Sentry) su app e background function
 - [ ] Restringere il CORS in `netlify.toml` al solo dominio dell'app
-- [ ] Backup del database verificato: non basta che esista, va provato un ripristino
+- [ ] Backup del database: oggi **non ne esiste nessuno** ("No backups" sul piano Free). Va creato, poi provato un ripristino
 
 **Fatto quando**: posso rompere il `main` e accorgermene dalla CI invece che da un cliente.
 
@@ -29,7 +29,7 @@ ogni rilascio successivo.
 Per il nostro condominio non serve: siamo gli unici utenti e il rischio è nullo.
 Serve tutto, invece, prima che entri qualcuno che non conosciamo.
 
-- [ ] Token d'invito veri: segreti, con scadenza, a uso singolo — oggi il token è l'id dell'unità
+- [ ] Rifare l'invito lato server: **oggi non collega nessuno** (RLS blocca l'update client-side). Token segreto, con scadenza, a uso singolo — non l'id dell'unità
 - [ ] Tabella `membri` e policy RLS riscritte sopra di essa
 - [ ] Deduplicazione dei condomini per indirizzo
 - [ ] Procedura di contestazione e subentro del primo iscritto

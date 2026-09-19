@@ -148,14 +148,32 @@ PDF: nascono due condomini paralleli con gli stessi dati e nessun collegamento.
 Serve riconoscere l'indirizzo e proporre *"questo condominio c'è già, chiedi
 accesso"* invece di crearne un altro.
 
-**4. L'invito non ha un vero token.** L'URL è `/invite/[token]` dove il token è
-**l'id dell'unità** (`src/app/api/invite-resident/route.ts:42`), e il
-collegamento avviene dal client con
-`update unita set user_id` (`src/app/invite/[token]/page.tsx:27`). Non scade, non
-è a uso singolo, non è segreto. Se la policy RLS su `unita` non blocca quella
-update, **chi conosce un id di unità può prendersi quell'unità**. Non è
-verificabile da questo repository, perché lo schema iniziale non è versionato:
-è un buon argomento per la Fase 0.
+**4. L'invito oggi non funziona affatto — verificato sul database.** L'URL è
+`/invite/[token]` dove il token è **l'id dell'unità**
+(`src/app/api/invite-resident/route.ts:42`), e il collegamento è una
+`update unita set user_id` eseguita **dal browser**
+(`src/app/invite/[token]/page.tsx:27`).
+
+La policy `resident_access` su `unita` è `for all using (user_id = auth.uid())`
+e non ha WITH CHECK, quindi la stessa condizione vale anche in scrittura: si può
+modificare solo una riga **già propria**. Un invitato appena registrato non
+possiede condomini e non è collegato ad alcuna unità, quindi la sua update non
+trova righe. Provato: con un utente qualsiasi, le righe su cui può agire sono
+**zero**.
+
+Due conseguenze, una buona e una cattiva:
+
+- **Nessuno può rivendicare un'unità altrui** conoscendone l'id. Il rischio che
+  sembrava esserci non c'è: RLS lo blocca.
+- **Ma non può farlo nemmeno chi è stato invitato davvero.** Una update che non
+  tocca righe non è un errore per Postgres: il codice riceve `error: null`,
+  considera riuscito il collegamento e manda l'utente in dashboard, dove
+  `getDashboardContext` non lo trova legato a nulla e lo rimbalza
+  all'onboarding. L'invito a cascata, su cui poggia tutto il modello di accesso,
+  **oggi non collega nessuno.**
+
+Va rifatto lato server, con la service role key e un token vero: segreto, con
+scadenza e a uso singolo.
 
 **5. Proprietario e inquilino non sono la stessa persona.** Alcune spese
 competono all'uno, altre all'altro, e la morosità è del proprietario. Se entra
