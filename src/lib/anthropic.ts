@@ -154,6 +154,17 @@ const REGOLE_IMPORTI = `Regole sugli importi:
 - Sommare le righe di una stessa voce, e sommare in "varie" le voci che non
   rientrano in nessuna categoria dello schema, è l'unico calcolo consentito:
   tutto il resto va copiato come stampato. Quando sommi, dillo in "note"
+- I rendiconti condominiali contengono quasi sempre, dopo l'elenco delle spese,
+  una o più TABELLE DI RIPARTO: ri-espongono le stesse spese già elencate,
+  divise fra le unità o per criterio di ripartizione. NON sono spese nuove e non
+  vanno messe né in "spese" né in "movimenti". Le riconosci da queste tracce:
+  percentuali di attribuzione ("80% periodo invernale", "60% spesa estiva",
+  "100% millesimi"), colonne per unità o per interno, intestazioni con
+  "riparto", "ripartizione", "suddivisione", "quote", "tabella millesimale", e
+  soprattutto dal fatto che i loro importi ricompaiono identici nell'elenco
+  spese. Nel dubbio fra elenco spese e riparto, prendi l'elenco spese
+- Se la stessa tabella di riparto compare più volte (una per scala, per
+  impianto o per criterio), vale comunque zero: non è una spesa ripetuta
 - CONTROLLO FINALE, fallo sempre: somma tutte le categorie e confrontale con il
   totale generale stampato nel documento. Se non torna hai saltato delle righe,
   e devi tornare a cercarle prima di rispondere. Se dopo la ricerca resta una

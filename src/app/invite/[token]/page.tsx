@@ -84,7 +84,9 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
           <div className="flex size-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
             <Building2 className="size-6" />
           </div>
-          <h1 className="text-2xl font-semibold">Benvenuto su CondoTwin</h1>
+          <h1 className="text-2xl font-semibold">
+            Benvenuto su {process.env.NEXT_PUBLIC_APP_NAME || "Condominiak"}
+          </h1>
           <p className="text-center text-sm text-muted-foreground">
             Sei stato invitato dall&apos;amministratore. Imposta una password per accedere
             alla tua area riservata.

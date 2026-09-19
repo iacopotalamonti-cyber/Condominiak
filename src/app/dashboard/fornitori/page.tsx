@@ -97,7 +97,11 @@ export default async function FornitoriPage({
               non le righe che li compongono.
             </p>
             {role === "admin" && archiviati.length > 0 && (
-              <EstraiFornitori condominiumId={condominium.id} archiviati={archiviati} />
+              <EstraiFornitori
+                condominiumId={condominium.id}
+                archiviati={archiviati}
+                anniConDati={anni}
+              />
             )}
           </CardContent>
         </Card>
@@ -197,7 +201,11 @@ export default async function FornitoriPage({
             <CardTitle className="text-base">Rileggi un documento</CardTitle>
           </CardHeader>
           <CardContent>
-            <EstraiFornitori condominiumId={condominium.id} archiviati={archiviati} />
+            <EstraiFornitori
+              condominiumId={condominium.id}
+              archiviati={archiviati}
+              anniConDati={anni}
+            />
           </CardContent>
         </Card>
       )}

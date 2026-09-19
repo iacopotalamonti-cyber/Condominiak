@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: process.env.NEXT_PUBLIC_APP_NAME || "CondoTwin",
+  title: process.env.NEXT_PUBLIC_APP_NAME || "Condominiak",
   description: "Gestione digitale condominiale con analisi AI",
 };
 

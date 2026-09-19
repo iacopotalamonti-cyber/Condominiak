@@ -11,8 +11,10 @@ import {
   CATEGORIE_SPESA_LABEL,
   MESI_LABEL,
   formatEuro,
+  millesimiIncompleti,
   quotaAnnua,
   quotaMensile,
+  sommaMillesimi,
 } from "@/lib/condotwin-calculations";
 import { esercizioCorrente } from "@/lib/bilancio";
 import type { Bilancio, Documento, Pagamento, Spesa, Unita } from "@/lib/types";
@@ -90,8 +92,13 @@ export default async function AppartamentoPage({
   const speseAnnoCorrente = spese.filter((s) => s.anno === esercizio?.anno);
 
   const consuntivoAnnuo = esercizio?.totale ?? 0;
-  const rataMensile = quotaMensile(unitaSelezionata.millesimi, consuntivoAnnuo);
-  const totaleAnnuo = quotaAnnua(unitaSelezionata.millesimi, consuntivoAnnuo);
+
+  // La quota si calcola sul totale dei millesimi realmente registrati: se la
+  // tabella non somma 1000, dividere per 1000 sottostimerebbe ogni rata senza
+  // che nessuno se ne accorga.
+  const totaleMillesimi = sommaMillesimi(unitaList);
+  const rataMensile = quotaMensile(unitaSelezionata.millesimi, consuntivoAnnuo, totaleMillesimi);
+  const totaleAnnuo = quotaAnnua(unitaSelezionata.millesimi, consuntivoAnnuo, totaleMillesimi);
 
   const meseCorrente = new Date().getMonth() + 1;
   const pagamentoCorrente = pagamenti.find((p) => p.mese === meseCorrente);
@@ -112,7 +119,17 @@ export default async function AppartamentoPage({
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KPICard label="Millesimi di proprietà" value={unitaSelezionata.millesimi.toFixed(2)} icon={Percent} />
+        <KPICard
+          label="Millesimi di proprietà"
+          value={unitaSelezionata.millesimi.toFixed(2)}
+          hint={
+            millesimiIncompleti(totaleMillesimi)
+              ? `su ${totaleMillesimi.toFixed(2)} registrati invece di 1000`
+              : undefined
+          }
+          icon={Percent}
+          tone={millesimiIncompleti(totaleMillesimi) ? "warning" : "default"}
+        />
         <KPICard label="Rata mensile" value={formatEuro(rataMensile)} icon={Wallet} />
         <KPICard
           label={esercizio ? `Totale annuo ${esercizio.anno}` : "Totale annuo"}
@@ -146,7 +163,7 @@ export default async function AppartamentoPage({
           ) : (
             <div className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
               {speseAnnoCorrente.map((s) => {
-                const quota = (unitaSelezionata.millesimi / 1000) * s.importo;
+                const quota = quotaAnnua(unitaSelezionata.millesimi, s.importo, totaleMillesimi);
                 return (
                   <div key={s.id} className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">
@@ -160,7 +177,13 @@ export default async function AppartamentoPage({
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-warning">Non classificato</span>
                   <span className="font-medium tabular-nums text-warning">
-                    {formatEuro((unitaSelezionata.millesimi / 1000) * esercizio.nonClassificato)}
+                    {formatEuro(
+                      quotaAnnua(
+                        unitaSelezionata.millesimi,
+                        esercizio.nonClassificato,
+                        totaleMillesimi
+                      )
+                    )}
                   </span>
                 </div>
               )}

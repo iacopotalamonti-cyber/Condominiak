@@ -20,7 +20,7 @@ interface SidebarProps {
   role: "admin" | "resident";
 }
 
-const ADMIN_LINKS = [
+export const ADMIN_LINKS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/bilanci", label: "Bilanci 5 anni", icon: Wallet },
   { href: "/dashboard/spese", label: "Analisi spese", icon: PieChart },
@@ -31,14 +31,18 @@ const ADMIN_LINKS = [
   { href: "/dashboard/impostazioni", label: "Impostazioni", icon: Settings },
 ];
 
-const RESIDENT_LINKS = [
+export const RESIDENT_LINKS = [
   { href: "/dashboard/appartamento", label: "Il mio appartamento", icon: Home },
   { href: "/dashboard/documenti", label: "Documenti", icon: FileText },
 ];
 
+export function linksPerRuolo(role: "admin" | "resident") {
+  return role === "admin" ? ADMIN_LINKS : RESIDENT_LINKS;
+}
+
 export function Sidebar({ role }: SidebarProps) {
   const pathname = usePathname();
-  const links = role === "admin" ? ADMIN_LINKS : RESIDENT_LINKS;
+  const links = linksPerRuolo(role);
 
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r bg-card sm:flex">
@@ -46,7 +50,7 @@ export function Sidebar({ role }: SidebarProps) {
         <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
           <Building2 className="size-4" />
         </div>
-        <span className="font-semibold">{process.env.NEXT_PUBLIC_APP_NAME || "CondoTwin"}</span>
+        <span className="font-semibold">{process.env.NEXT_PUBLIC_APP_NAME || "Condominiak"}</span>
       </div>
       <nav className="flex flex-1 flex-col gap-1 p-3">
         {links.map((link) => {

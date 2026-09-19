@@ -43,25 +43,38 @@ export async function risolviFornitori(
 
   if (!mancanti.length) return mappa;
 
-  // Due documenti caricati insieme possono nominare lo stesso fornitore nuovo:
-  // l'indice unico su (condominio, nome) impedisce il doppione, e onConflict
-  // fa sì che il secondo inserimento lo ritrovi invece di fallire.
-  const { data: creati, error } = await supabase
-    .from("fornitori")
-    .upsert(mancanti, { onConflict: "condominium_id,nome", ignoreDuplicates: false })
-    .select("*");
+  // Inserimento semplice e non upsert: l'indice che protegge dai doppioni è su
+  // lower(nome), un'espressione, e ON CONFLICT vuole colonne. Combinarli faceva
+  // fallire ogni inserimento — ed è il motivo per cui l'anagrafica restava
+  // vuota mentre i movimenti avevano il nome del fornitore.
+  const { data: creati, error } = await supabase.from("fornitori").insert(mancanti).select("*");
 
-  if (error) {
-    // L'anagrafica è un miglioramento, non una condizione per salvare le spese:
-    // se fallisce, i movimenti si salvano comunque con il solo nome scritto.
-    console.error("Anagrafica fornitori non aggiornata:", error.message);
+  if (!error) {
+    for (const fornitore of (creati ?? []) as Fornitore[]) {
+      const chiave = chiaveFornitore(fornitore.nome);
+      if (chiave) mappa.set(chiave, fornitore.id);
+    }
     return mappa;
   }
 
-  for (const fornitore of (creati ?? []) as Fornitore[]) {
-    for (const chiave of [chiaveFornitore(fornitore.nome)]) {
-      if (chiave) mappa.set(chiave, fornitore.id);
-    }
+  // Se qualcuno ha inserito lo stesso fornitore nel frattempo, l'indice unico
+  // fa il suo lavoro: si rilegge invece di considerarlo un errore.
+  const { data: rilettura } = await supabase
+    .from("fornitori")
+    .select("*")
+    .eq("condominium_id", condominiumId);
+
+  const aggiornato = indiceFornitori((rilettura ?? []) as Fornitore[]);
+  for (const chiave of daCreare.keys()) {
+    const trovato = aggiornato.get(chiave);
+    if (trovato) mappa.set(chiave, trovato.id);
+  }
+
+  // L'anagrafica è un miglioramento, non una condizione per salvare le spese:
+  // se anche la rilettura non trova nulla, i movimenti si salvano con il solo
+  // nome scritto nel documento.
+  if (mappa.size < daCreare.size) {
+    console.error("Anagrafica fornitori incompleta:", error.message);
   }
 
   return mappa;

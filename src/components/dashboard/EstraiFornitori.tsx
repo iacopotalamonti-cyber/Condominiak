@@ -12,6 +12,9 @@ import type { DocumentoArchiviato } from "@/components/dashboard/AggiungiBilanci
 interface EstraiFornitoriProps {
   condominiumId: string;
   archiviati: DocumentoArchiviato[];
+  // Anni che hanno già dei movimenti salvati: rileggerli li sostituisce, e
+  // con essi le correzioni fatte a mano.
+  anniConDati?: number[];
 }
 
 // I documenti sono già in archivio: per ricavarne i fornitori non serve
@@ -19,7 +22,11 @@ interface EstraiFornitoriProps {
 // prende tutti: ogni rilettura è una chiamata al modello che si paga, e
 // lanciarne tre con un clic solo è una spesa decisa dall'interfaccia invece
 // che da chi la usa.
-export function EstraiFornitori({ condominiumId, archiviati }: EstraiFornitoriProps) {
+export function EstraiFornitori({
+  condominiumId,
+  archiviati,
+  anniConDati = [],
+}: EstraiFornitoriProps) {
   const router = useRouter();
   const [inCorso, setInCorso] = useState<string | null>(null);
   const [stato, setStato] = useState("");
@@ -27,6 +34,16 @@ export function EstraiFornitori({ condominiumId, archiviati }: EstraiFornitoriPr
   const [esito, setEsito] = useState<string | null>(null);
 
   async function rileggi(doc: DocumentoArchiviato) {
+    // Una rilettura riscrive l'anno intero. Finché il salvataggio non sa
+    // distinguere un importo corretto a mano da uno letto dal modello, l'unica
+    // difesa onesta è chiederlo prima invece di farlo scoprire dopo.
+    if (anniConDati.includes(doc.anno)) {
+      const conferma = window.confirm(
+        `Il ${doc.anno} ha già dei dati salvati. Rileggerlo li sostituisce, comprese le correzioni fatte a mano. Procedo?`
+      );
+      if (!conferma) return;
+    }
+
     setInCorso(doc.path);
     setErrore(null);
     setEsito(null);

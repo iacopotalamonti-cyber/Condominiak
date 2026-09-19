@@ -76,7 +76,7 @@ export default function LoginPage() {
             <Building2 className="size-6" />
           </div>
           <h1 className="text-2xl font-semibold">
-            {process.env.NEXT_PUBLIC_APP_NAME || "CondoTwin"}
+            {process.env.NEXT_PUBLIC_APP_NAME || "Condominiak"}
           </h1>
           <p className="text-sm text-muted-foreground">
             La gestione digitale del tuo condominio
