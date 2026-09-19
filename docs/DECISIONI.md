@@ -40,7 +40,19 @@ un nome di file è esattamente ciò che ha reso necessario questo lavoro, e i fi
 vicini (`bilancio.ts`, `movimenti.ts`, `fornitori.ts`) già si chiamano per il
 dominio, non per il prodotto.
 
+**19/09/2026 — Il cliente è il condominio, non l'amministratore.**
+Paga il condominio: si iscrive un condòmino o un consigliere, carica i
+rendiconti che l'amministratore ha già inviato, e l'app li elabora.
+L'amministratore entra solo se il condominio lo invita. Scartato:
+l'amministratore professionista come cliente pagante, che avrebbe richiesto
+riparto, rendiconto e contabilità da produrre, non da leggere. Conseguenza: il
+prodotto è uno strumento di verifica, e la qualità dell'estrazione dai PDF non è
+una funzionalità fra le altre — è il prodotto. Vedi `SERVIZI.md` Parte B.
+
 ## Aperte
 
-**Chi è il cliente pagante** — vedi le cinque domande in `SERVIZI.md`. È la
-decisione da cui dipendono multi-tenancy, prezzi e metà della roadmap.
+**Cosa vede un condòmino che non è consigliere**, e come trattiamo i dati
+personali degli altri condòmini contenuti nei rendiconti (morosità in primo
+luogo). Vedi le cinque domande aperte in `SERVIZI.md`.
+
+**Prezzo e modalità di incasso** dell'abbonamento per condominio.

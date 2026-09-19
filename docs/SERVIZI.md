@@ -34,55 +34,84 @@ di cui vuoi **cambiare** o **estendere** il comportamento.
 
 ---
 
-## Parte B — Servizi da costruire
+## Parte B — Posizionamento (deciso il 19/09/2026)
 
-> Da compilare. Sotto ci sono le domande a cui mi serve una risposta, e una
-> lista di candidati plausibili per un gestionale condominiale italiano: cancella
-> quelli che non ti interessano, tieni quelli che sì, aggiungi i tuoi.
+**Il cliente è il condominio, non l'amministratore.**
 
-### Domande a cui rispondere prima di tutto il resto
+- **Chi paga**: il condominio. Si iscrive un condòmino o un consigliere, che
+  incarica qualcuno di caricare i documenti; l'app li elabora e restituisce il
+  quadro completo. L'amministratore partecipa **solo se il condominio lo vuole**:
+  è un ospite invitato, non il titolare dell'account.
+- **Da dove vengono i dati**: dai rendiconti che l'amministratore ha **già
+  inviato** ai condòmini. Lì dentro c'è tutto — riparti, costi, fornitori,
+  millesimi. Non ci affianchiamo a un gestionale e non lo sostituiamo: leggiamo
+  il suo output. Il lavoro è tirare fuori bene quelle informazioni.
+- **Primo cliente**: il condominio di Iacopo.
 
-1. **Chi paga?** L'amministratore professionista (abbonamento per condominio
-   gestito), lo studio (abbonamento a fasce), o il condominio stesso? Da questa
-   risposta dipendono autenticazione multi-studio, fatturazione e prezzi.
-2. **Quanti condomini per utente?** Oggi il modello dati regge più condomini per
-   `owner_id`, ma la dashboard ragiona su uno solo alla volta. Un amministratore
-   con 40 condomini è un prodotto diverso da uno con 1.
-3. **Il condomino è un utente o un destinatario?** Oggi riceve un invito e vede
-   il suo appartamento. Deve poter fare qualcosa (segnalare, pagare, votare) o
-   solo leggere?
-4. **Sostituiamo il gestionale dell'amministratore o ci affianchiamo?** Se ci
-   affianchiamo, l'import dai gestionali esistenti (Danea, Arcadia, Domustudio)
-   diventa il servizio più importante di tutti. Se lo sostituiamo, servono
-   registro anagrafico, riparto, rendiconto ex art. 1130-bis c.c.: molto più lavoro.
-5. **Chi è il primo cliente vero?** Un nome. La roadmap si ordina su di lui, non
-   sull'elenco delle funzionalità.
+### Cosa comporta questa scelta
 
-### Candidati (da confermare, scartare o riscrivere)
+1. **È uno strumento di lettura e verifica, non di gestione.** Il codice già
+   scritto va esattamente in questa direzione: provenienza di ogni importo
+   (documento, pagina, riga), quadratura dei totali, conflitti mostrati invece
+   che risolti in silenzio. Non è un gestionale a cui manca qualcosa — è un
+   revisore a cui manca l'ultimo miglio.
+2. **Nessun dato entra a mano da un amministratore.** Tutto arriva da PDF. La
+   qualità dell'estrazione non è una funzionalità fra le altre: è il prodotto.
+3. **La dashboard oggi si chiama "amministratore"** ma il suo utente diventa il
+   consigliere. Va rivista nel linguaggio e nei permessi, non nei dati.
+4. **Privacy, da affrontare presto.** Un rendiconto contiene dati personali di
+   tutti i condòmini (nomi, quote, morosità). Un condòmino ha diritto di
+   consultare i documenti contabili (art. 1130-bis c.c.), ma mostrare le
+   morosità altrui dentro un'app va deciso con attenzione. Chi vede cosa è una
+   scelta di prodotto, non un dettaglio tecnico.
 
-- [ ] **Multi-condominio** — elenco condomini, switch rapido, KPI aggregati sullo studio
-- [ ] **Riparto spese e rendiconto** — dalla spesa ai millesimi al dovuto per unità
-- [ ] **Rate e solleciti** — piano rate, stato pagamenti, sollecito automatico
-- [ ] **Incassi** — riconciliazione estratto conto bancario ↔ rate dovute
-- [ ] **Pagamento online del condomino** — carta / SEPA / PagoPA
-- [ ] **Scadenzario** — contratti, revisioni impianti, assicurazioni, adempimenti; con avvisi
-- [ ] **Segnalazioni / ticket** — il condomino segnala un guasto, l'amministratore traccia
-- [ ] **Assemblee** — convocazione, deleghe, quorum, verbale, voto
-- [ ] **Comunicazioni** — email/PEC massive ai condomini con tracciamento invio
-- [ ] **Archivio documentale strutturato** — ricerca full-text, categorie, retention
-- [ ] **Anagrafica condomini completa** — proprietari/inquilini, subentri, quote
-- [ ] **Preventivo e consuntivo assistiti** — costruzione del preventivo dall'anno prima
-- [ ] **Import da gestionale esistente** — CSV/Excel/PDF dei principali software
-- [ ] **Fatturazione ai clienti (nostra)** — abbonamento, fatture elettroniche SDI
-- [ ] **Portale pubblico del condominio** — bacheca, documenti, contatti
-- [ ] **App mobile / PWA** — notifiche push al condomino
-- [ ] **Assistente conversazionale** — domande in linguaggio naturale sui documenti del condominio
+### Domande ancora aperte
+
+1. **Cosa vede un condòmino che non è consigliere?** Ha un account o riceve solo
+   un riepilogo? Vede i numeri di tutto il condominio o solo i propri?
+2. **Quali sono le tre cose** che un condòmino deve poter dire dopo cinque
+   minuti nell'app ("ora ho capito X")? Da qui si ordina tutto il resto.
+3. **Un utente segue più condomini?** Chi ha due case, o siede in due consigli.
+4. **Quanto costa e chi materialmente paga?** Abbonamento annuo per condominio
+   anticipato da un condòmino e poi ripartito, oppure delibera assembleare?
+5. **Quali documenti carichiamo il primo giorno?** Solo consuntivo e riparto, o
+   anche preventivo, verbali, contratti?
 
 ---
 
-## Parte C — Cosa il prodotto **non** fa
+## Parte C — Servizi da costruire
 
-Altrettanto importante. Scrivere qui "non facciamo la contabilità in partita
-doppia" o "non gestiamo il personale (portieri)" evita mesi di lavoro sbagliato.
+> Ricalibrati sul condominio come cliente. Cancella, aggiungi, commenta.
 
-- (da compilare)
+- [ ] **Estrazione del riparto per unità** — oggi l'estrazione legge i millesimi
+      di ogni unità, ma **non quanto è stato addebitato a ciascuna** per ogni
+      categoria: le righe di riparto vengono riconosciute e deliberatamente
+      escluse dalle spese. Per un prodotto del condominio è il buco più grande:
+      senza, alla domanda "perché ho pagato 1.240 €?" l'app non sa rispondere.
+- [ ] **"Quanto ho pagato io e perché"** — la vista del singolo condòmino: la sua
+      quota, come nasce dal totale attraverso i millesimi, con la riga del documento
+- [ ] **Verifica del riparto** — ricalcolare le quote dai millesimi e confrontarle
+      con quelle stampate nel rendiconto: se non tornano, dirlo
+- [ ] **Confronto fra anni** — cosa è aumentato, di quanto, per quale fornitore
+- [ ] **Scheda fornitore leggibile dal condòmino** — quanto incassa, da quanti anni,
+      con quali categorie
+- [ ] **Ruoli e inviti** — consigliere (carica, configura) vs condòmino (legge);
+      invito dell'amministratore come ospite, revocabile
+- [ ] **Domande in linguaggio naturale** sui documenti del condominio
+- [ ] **Segnalazione di anomalie** — voci senza fornitore, scostamenti dal preventivo,
+      spese fuori scala rispetto agli anni precedenti
+- [ ] **Esportazione** — un PDF di sintesi da portare in assemblea
+- [ ] **Abbonamento e pagamento** (dopo il primo cliente)
+
+---
+
+## Parte D — Cosa il prodotto **non** fa
+
+- **Non è un gestionale per amministratori**: niente contabilità in partita
+  doppia, niente emissione di rendiconti, niente gestione del personale.
+- **Non produce documenti ufficiali**: non genera il rendiconto ex art. 1130-bis,
+  lo legge.
+- **Non incassa le quote condominiali** e non si sostituisce al conto corrente
+  del condominio.
+- **Non sostituisce l'amministratore** e non dà pareri legali: mostra i numeri e
+  da dove vengono.
