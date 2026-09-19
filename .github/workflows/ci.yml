@@ -19,7 +19,10 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          # 22 e non 20: i test girano con --experimental-strip-types, che Node
+          # 20 non conosce. Su Node 20 la CI fallisce mentre in locale passa.
+          # Nota: netlify.toml costruisce ancora con NODE_VERSION=20.
+          node-version: "22"
           cache: npm
 
       - name: Installa le dipendenze
