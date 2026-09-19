@@ -1,0 +1,35 @@
+# Controlli automatici su ogni push e ogni pull request.
+#
+# Sono gli stessi tre comandi che si lanciano in locale prima di un commit:
+# se passano qui, il ramo è rilasciabile. Nessuna chiave d'ambiente serve —
+# il build di Next.js non contatta né Supabase né Anthropic.
+
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  controlli:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Installa le dipendenze
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
