@@ -17,6 +17,9 @@ import {
   type ExtractionMode,
   controlliBilancio,
   extractionPrompt,
+  pagineDiRiparto,
+  promptCorrezione,
+  sommaSpese,
   mergeExtractions,
   normalizeExtraction,
   parseExtractionOutput,
@@ -187,7 +190,8 @@ async function callModel(
   index: number,
   total: number,
   mode: ExtractionMode,
-  testoPagine: Map<number, string>
+  testoPagine: Map<number, string>,
+  correzione = ""
 ): Promise<ExtractionResult> {
   const base64 = Buffer.from(piece.data).toString("base64");
   const block: Anthropic.ContentBlockParam =
@@ -221,7 +225,24 @@ async function callModel(
       messages: [
         {
           role: "user",
-          content: [block, { type: "text", text: extractionPrompt(label(piece), index, total, mode) }],
+          content: [
+            block,
+            {
+              type: "text",
+              text:
+                extractionPrompt(
+                  label(piece),
+                  index,
+                  total,
+                  mode,
+                  // Le pagine vanno rinumerate come le vede il modello in
+                  // questo blocco, non come stanno nel documento intero.
+                  pagineDiRiparto(testoPagine)
+                    .filter((p) => p > piece.offset && p <= piece.offset + piece.pages)
+                    .map((p) => p - piece.offset)
+                ) + correzione,
+            },
+          ],
         },
       ],
     })
@@ -309,6 +330,12 @@ async function rileggiBilancio(
   documenti: Map<string, { doc: PDFDocument; pagine: number; testo: Map<number, string> }>,
   mode: ExtractionMode
 ): Promise<ExtractionResult | null> {
+  // Lo scarto fra le voci lette e il totale stampato è l'unica informazione
+  // che il modello non poteva avere alla prima passata: nasce dal confronto
+  // fra la sua risposta e il documento. Ripetere il prompt identico, come
+  // faceva prima, otteneva lo stesso risultato.
+  const riferimento = bilancio.totale || bilancio.cons;
+  const somma = sommaSpese(bilancio.spese);
   for (const [nome, pagine] of paginePerDocumento(bilancio)) {
     const sorgente = documenti.get(nome);
     if (!sorgente) continue;
@@ -319,9 +346,19 @@ async function rileggiBilancio(
     const a = Math.min(sorgente.pagine, Math.max(...pagine) + 1);
     if (a - da < 1 || a - da > MAX_PAGES_PER_REQUEST) continue;
 
+
+    const riparto = pagineDiRiparto(sorgente.testo)
+      .filter((p) => p > da && p <= a)
+      .map((p) => p - da);
+
+    const correzione = riferimento && somma ? promptCorrezione(somma, riferimento, riparto) : "";
+
     const piece = await pdfSlice(sorgente.doc, nome, 0, da, a);
-    console.log(`Rilettura mirata di ${label(piece)} per l'esercizio ${bilancio.anno}`);
-    return await callModel(anthropic, piece, 1, 1, mode, sorgente.testo);
+    console.log(
+      `Rilettura correttiva di ${label(piece)} per l'esercizio ${bilancio.anno}: ` +
+        `voci ${somma} contro totale ${riferimento}`
+    );
+    return await callModel(anthropic, piece, 1, 1, mode, sorgente.testo, correzione);
   }
 
   return null;

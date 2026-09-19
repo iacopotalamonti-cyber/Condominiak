@@ -11,6 +11,9 @@ import {
   num,
   scriviImporto,
   sommaSpese,
+  pagineDiRiparto,
+  paginaDiRiparto,
+  promptCorrezione,
   verificaImporto,
   type ContestoEstrazione,
 } from "../anthropic.ts";
@@ -241,4 +244,62 @@ test("leggiImporto e scriviImporto coprono tutti i campi dello schema", () => {
   for (const [i, campo] of CAMPI_IMPORTO.entries()) {
     assert.equal(leggiImporto(bilancio, campo), i + 1);
   }
+});
+
+// Il riparto è la causa dell'eccedenza di 21.428,92 sul rendiconto reale:
+// riconoscerlo dal testo della pagina non dipende dal formato del documento.
+test("una tabella di riparto viene riconosciuta dal testo", () => {
+  assert.equal(paginaDiRiparto("TABELLA MILLESIMALE GENERALE — riparto spese anno 2024"), true);
+  assert.equal(
+    paginaDiRiparto(
+      "Totale Fatture Gas per RISCALDAMENTO (80% spesa periodo Invernale) 4.865,32 " +
+        "Manutenzione C.T. (100% Mm Cli nuovi) 2.213,03 Forza Motrice (80% Totale spesa) 710,40"
+    ),
+    true,
+    "le percentuali di attribuzione sono la firma del riparto"
+  );
+  assert.equal(
+    paginaDiRiparto("Prospetto di ripartizione — interno n. 9 scala A millesimi 68,60"),
+    true
+  );
+});
+
+// "Spesa ripartizione costi" è una voce di spesa vera: il servizio di lettura
+// dei contatori. Un solo indizio non deve far scartare una pagina buona.
+test("l'elenco spese non viene scambiato per un riparto", () => {
+  assert.equal(
+    paginaDiRiparto(
+      "001.005 Assicurazione UnipolSai Assicurazioni S.p.A. 2.157,10 " +
+        "002.004 Canone manutenzione impianto ascensore Otis 1.553,11 " +
+        "300.001 Spesa ripartizione costi AFS Bemati Energy srl 85,40"
+    ),
+    false
+  );
+  assert.equal(paginaDiRiparto(""), false);
+  assert.equal(paginaDiRiparto("Totale Gen. 27.748,85"), false);
+});
+
+test("le pagine di riparto vengono elencate in ordine", () => {
+  const pagine = new Map([
+    [3, "001.001 Spese Amministrative Tosiani Angelo 1.586,00"],
+    [27, "Riparto generale spese — millesimi per interno"],
+    [28, "Totale Gas (80% periodo invernale) 4.865,32 Manutenzione (100% Mm) 2.213,03 (60% estiva) 480,48"],
+  ]);
+  assert.deepEqual(pagineDiRiparto(pagine), [27, 28]);
+});
+
+// La rilettura ripeteva il prompt identico e rifaceva lo stesso errore: ora
+// porta con sé lo scarto, che è l'unica cosa che il modello non poteva sapere.
+test("la correzione dice al modello quanto e in che direzione sbaglia", () => {
+  const eccesso = promptCorrezione(49177.77, 27748.85, [27, 28]);
+  assert.match(eccesso, /DI TROPPO/);
+  assert.match(eccesso, /21\.428,92/);
+  assert.match(eccesso, /pagine 27, 28/);
+
+  // L'italiano non raggruppa le migliaia sotto le cinque cifre: 6964,55 ma
+  // 27.748,85. Il confronto guarda le cifre, non la punteggiatura.
+  const difetto = promptCorrezione(20784.3, 27748.85, []);
+  assert.match(difetto, /MANCANO/);
+  assert.match(difetto, /6\.?964,55/);
+  assert.doesNotMatch(difetto, /pagine/);
 });

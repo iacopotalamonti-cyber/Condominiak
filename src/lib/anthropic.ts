@@ -261,6 +261,42 @@ Restituisci SOLO JSON valido, senza markdown, senza testo aggiuntivo:
 
 export type ExtractionMode = "condominio" | "bilancio";
 
+// La rilettura serviva a poco perché rimandava le stesse istruzioni: stesso
+// documento, stesso prompt, stesso errore. Qui invece il modello riceve lo
+// scarto misurato — un dato che non poteva conoscere, perché nasce dal
+// confronto fra la sua risposta e il totale stampato.
+export function promptCorrezione(
+  sommaVoci: number,
+  totaleStampato: number,
+  pagineRiparto: number[]
+): string {
+  const scarto = arrotonda(sommaVoci - totaleStampato);
+  const sospette = pagineRiparto.length
+    ? ` Le pagine ${pagineRiparto.join(", ")} sembrano tabelle di riparto: comincia da lì.`
+    : "";
+
+  if (scarto > 0) {
+    return `
+CORREZIONE. Una prima lettura di questo documento ha prodotto voci di spesa che sommano
+${eur(sommaVoci)}, mentre il totale stampato nel documento è ${eur(totaleStampato)}:
+${eur(scarto)} DI TROPPO. Quasi sempre significa che sono state incluse righe di una
+tabella di riparto, oppure che la stessa tabella è stata letta due volte perché ricompare
+più avanti.${sospette}
+Rileggi e restituisci SOLO le righe dell'elenco spese vere. Le voci devono sommare
+${eur(totaleStampato)}. Non togliere righe a caso per far quadrare il conto: togli quelle
+che ri-espongono importi già presenti altrove, e scrivi in "note" quali hai escluso e perché.`;
+  }
+
+  return `
+CORREZIONE. Una prima lettura di questo documento ha prodotto voci di spesa che sommano
+${eur(sommaVoci)}, mentre il totale stampato nel documento è ${eur(totaleStampato)}:
+MANCANO ${eur(-scarto)}. Significa che delle righe di spesa non sono state lette — spesso
+perché la tabella prosegue oltre il salto pagina, o perché una voce raggruppa più righe.
+Rileggi con attenzione e cerca le righe mancanti. Le voci devono sommare
+${eur(totaleStampato)}. Se non le trovi, NON gonfiare una categoria: scrivi in "note"
+quanto manca e dove pensi che sia.`;
+}
+
 // Ogni documento viene analizzato in una richiesta separata: senza questa nota
 // il modello prova a "completare" lo schema deducendo i campi che vede mancare,
 // e in fase di fusione quei valori inventati sovrascriverebbero quelli reali
@@ -269,12 +305,24 @@ export function extractionPrompt(
   label: string,
   index: number,
   total: number,
-  mode: ExtractionMode = "condominio"
+  mode: ExtractionMode = "condominio",
+  // Pagine che il testo del PDF indica come tabelle di riparto, numerate come
+  // le vede il modello in questo blocco.
+  pagineRiparto: number[] = []
 ): string {
   const base = mode === "bilancio" ? BILANCIO_PROMPT : EXTRACTION_PROMPT;
-  if (total <= 1) return base;
 
-  return `${base}
+  const avviso = pagineRiparto.length
+    ? `
+
+ATTENZIONE: dal testo del documento le pagine ${pagineRiparto.join(", ")} di questo blocco
+sembrano TABELLE DI RIPARTO. Verificale: se lo sono, i loro importi sono spese già
+elencate altrove e non vanno messi né in "spese" né in "movimenti".`
+    : "";
+
+  if (total <= 1) return base + avviso;
+
+  return `${base}${avviso}
 
 CONTESTO: stai analizzando solo una parte della documentazione (${label} — blocco ${index} di ${total}).
 Estrai esclusivamente i dati presenti in QUESTO blocco e lascia a 0 / "" tutto il resto: i campi
@@ -405,6 +453,58 @@ export function verificaImporto(
 
   if (!vicine.length) return "non_verificabile";
   return vicine.some((testo) => soleCifre(testo).includes(cifre)) ? "verificata" : "non_trovata";
+}
+
+// -----------------------------------------------------------------------
+// Riconoscere le tabelle di riparto
+// -----------------------------------------------------------------------
+
+// Un rendiconto, dopo l'elenco delle uscite, ri-espone le stesse somme divise
+// fra le unità. Quelle pagine non sono spese, e finché il modello le legge come
+// tali i totali usciranno gonfiati. Il testo delle pagine ce l'abbiamo già
+// estratto per la verifica degli importi: qui si usa per dire al modello dove
+// sono, invece di sperare che se ne accorga.
+//
+// Un solo indizio non basta: "Spesa ripartizione costi" è una voce di spesa
+// vera, il servizio di lettura dei contatori. Servono più segnali insieme, o
+// uno inequivocabile.
+const RIPARTO_INEQUIVOCABILI = [
+  /tabella\s+millesimal/i,
+  /prospetto\s+di\s+ripart/i,
+  /riparto\s+(?:generale|spese|delle\s+spese)/i,
+  /quote?\s+millesimal/i,
+  /suddivisione\s+(?:spese|delle\s+spese)/i,
+];
+
+const RIPARTO_INDIZI = [
+  /millesim/i,
+  /\brepart|ripartiz/i,
+  /a\s+carico\s+(?:di|dei|delle)/i,
+  /\bsubalterno\b|\binterno\s+n/i,
+  /\bscala\s+[A-Z]\b/,
+];
+
+// Le percentuali di attribuzione — "(80% spesa periodo invernale)", "(100% Mm
+// Cli nuovi)" — sono la firma del riparto: nell'elenco spese non servono.
+const PERCENTUALI_ATTRIBUZIONE = /\(\s*\d{1,3}\s*%[^)]{0,60}\)/g;
+
+export function paginaDiRiparto(testo: string): boolean {
+  if (!testo || testo.trim().length < 40) return false;
+  if (RIPARTO_INEQUIVOCABILI.some((marcatore) => marcatore.test(testo))) return true;
+
+  const indizi = RIPARTO_INDIZI.filter((marcatore) => marcatore.test(testo)).length;
+  const percentuali = (testo.match(PERCENTUALI_ATTRIBUZIONE) ?? []).length;
+
+  // Due indizi diversi, oppure un indizio accompagnato da più percentuali di
+  // attribuzione: una sola percentuale capita anche in una fattura.
+  return indizi >= 2 || (indizi >= 1 && percentuali >= 2) || percentuali >= 3;
+}
+
+export function pagineDiRiparto(testoPagine: Map<number, string>): number[] {
+  return Array.from(testoPagine.entries())
+    .filter(([, testo]) => paginaDiRiparto(testo))
+    .map(([pagina]) => pagina)
+    .sort((a, b) => a - b);
 }
 
 // -----------------------------------------------------------------------
