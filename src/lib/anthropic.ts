@@ -195,9 +195,9 @@ const REGOLE_BILANCI = `Regole sui bilanci:
   approvazione né quella di stampa del documento
 - Un esercizio a cavallo di due anni solari (per esempio 01/07/2024-30/06/2025,
   o un rendiconto intitolato "2024-2025") è UN SOLO esercizio, non due:
-  restituisci una sola voce, con "anno" uguale all'anno di CHIUSURA. Non
-  spezzare lo stesso rendiconto in due bilanci e non ripetere lo stesso totale
-  sotto due anni diversi
+  restituisci una sola voce, con "anno" uguale al PRIMO dei due anni, quello
+  con cui il documento stesso si intitola. Non spezzare lo stesso rendiconto in
+  due bilanci e non ripetere lo stesso totale sotto due anni diversi
 - "prev" è il preventivo, "cons" il consuntivo, "fondo" il fondo di riserva
 - Ogni voce di spesa appartiene all'anno del proprio bilancio: non mescolare
   esercizi diversi nella stessa voce`;
