@@ -121,6 +121,68 @@ estrae nulla: sono archiviati come documenti e basta.
 - **Contratti di fornitura**: non servono. Serve però poter **modificare a mano**
   un fornitore quando cambia, aggiungendolo dalla sua sezione.
 
+### Come si entra: il modello scelto (19/09/2026)
+
+**Chi possiede i documenti entra.** Il primo che iscrive il proprio condominio
+deve caricare i documenti richiesti: senza, il servizio non parte. Da lì invita
+a cascata gli altri. Ogni persona vede solo il proprio condominio.
+
+È un modello proporzionato e già in parte implementato (l'invito esistente è
+legato a una **unità specifica**, non a un'email qualsiasi: è la scelta giusta).
+Ha però otto punti deboli noti, elencati qui perché non vadano persi.
+
+**1. Il documento non prova l'appartenenza.** Un rendiconto circola: email,
+WhatsApp, il fascicolo consegnato a un acquirente in compravendita, l'agenzia,
+l'inquilino, il tecnico, l'avvocato. Prova che chi lo possiede ha avuto accesso
+al documento, non che abiti lì. È una barriera bassa — accettabile all'inizio,
+da non confondere con una verifica.
+
+**2. Chi arriva primo prende tutto, e nessuno può contestarlo.** Oggi il primo
+diventa `owner_id` del condominio, con accesso in scrittura a ogni tabella. Se è
+l'inquilino, l'ex proprietario, o un condòmino in lite con gli altri, non esiste
+procedura di subentro né di contestazione. Serve prima di aprire a condomini non
+nostri.
+
+**3. Il duplicato.** Due persone dello stesso condominio caricano ognuna i propri
+PDF: nascono due condomini paralleli con gli stessi dati e nessun collegamento.
+Serve riconoscere l'indirizzo e proporre *"questo condominio c'è già, chiedi
+accesso"* invece di crearne un altro.
+
+**4. L'invito non ha un vero token.** L'URL è `/invite/[token]` dove il token è
+**l'id dell'unità** (`src/app/api/invite-resident/route.ts:42`), e il
+collegamento avviene dal client con
+`update unita set user_id` (`src/app/invite/[token]/page.tsx:27`). Non scade, non
+è a uso singolo, non è segreto. Se la policy RLS su `unita` non blocca quella
+update, **chi conosce un id di unità può prendersi quell'unità**. Non è
+verificabile da questo repository, perché lo schema iniziale non è versionato:
+è un buon argomento per la Fase 0.
+
+**5. Proprietario e inquilino non sono la stessa persona.** Alcune spese
+competono all'uno, altre all'altro, e la morosità è del proprietario. Se entra
+l'inquilino, cosa vede?
+
+**6. Nessuno avvisa quando si vende casa.** Chi vende deve perdere l'accesso, chi
+compra ottenerlo. Senza una riconferma periodica o un'azione del consigliere,
+l'accesso resta a chi non abita più lì.
+
+**7. I dati degli altri entrano prima del loro consenso.** Il primo iscritto
+carica un documento che contiene i dati di tutti, compresi quelli che non si
+iscriveranno mai. L'invito a cascata non risolve il problema: lo rende visibile
+solo a chi entra. Da affrontare con l'informativa, non con il codice.
+
+**8. "Vede solo il proprio condominio" oggi non è rappresentabile.** Le policy
+RLS poggiano su due sole relazioni — `condominiums.owner_id = auth.uid()` e
+`unita.user_id = auth.uid()`. Non esiste una tabella di appartenenza, quindi non
+si possono esprimere: un consigliere che non possiede il record, un utente con
+due case, un amministratore ospite, un accesso revocato. Serve una tabella
+`membri (condominium_id, user_id, unita_id, ruolo, stato)` con le policy
+riscritte sopra di essa.
+
+**Cosa serve prima di aprire al secondo condominio** (per il nostro il rischio è
+nullo, siamo gli unici utenti): token d'invito veri con scadenza e uso singolo,
+tabella `membri` con RLS riscritte, deduplicazione per indirizzo, procedura di
+contestazione e subentro.
+
 ### Domande ancora aperte
 
 1. **Come verifichiamo che chi si iscrive sia davvero di quel condominio?** Se

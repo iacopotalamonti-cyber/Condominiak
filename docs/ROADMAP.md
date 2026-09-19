@@ -24,6 +24,17 @@ ogni rilascio successivo.
 
 **Fatto quando**: posso rompere il `main` e accorgermene dalla CI invece che da un cliente.
 
+## Fase 1 bis — Appartenenza e accesso (prima del secondo condominio)
+
+Per il nostro condominio non serve: siamo gli unici utenti e il rischio è nullo.
+Serve tutto, invece, prima che entri qualcuno che non conosciamo.
+
+- [ ] Token d'invito veri: segreti, con scadenza, a uso singolo — oggi il token è l'id dell'unità
+- [ ] Tabella `membri` e policy RLS riscritte sopra di essa
+- [ ] Deduplicazione dei condomini per indirizzo
+- [ ] Procedura di contestazione e subentro del primo iscritto
+- [ ] Decidere cosa vede l'inquilino rispetto al proprietario
+
 ## Fase 1 — Chiarire il prodotto
 
 Non è lavoro di codice ed è il collo di bottiglia vero.
