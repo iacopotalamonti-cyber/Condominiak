@@ -10,6 +10,7 @@ import {
   CAMPI_IMPORTO,
   EXTRACTION_MAX_TOKENS,
   EXTRACTION_MODEL,
+  effortValido,
   MAX_PAGES_PER_REQUEST,
   PAGINE_SOVRAPPOSTE,
   type ContestoEstrazione,
@@ -171,6 +172,15 @@ async function testoPerPagina(data: Uint8Array): Promise<Map<number, string>> {
   return pagine;
 }
 
+// Modello ed effort sono la leva di costo principale: sovrascrivibili senza
+// toccare il codice, così provare un modello più economico non costa un deploy.
+function configurazioneModello() {
+  return {
+    model: Netlify.env.get("EXTRACTION_MODEL") ?? EXTRACTION_MODEL,
+    effort: effortValido(Netlify.env.get("EXTRACTION_EFFORT")),
+  };
+}
+
 async function callModel(
   anthropic: Anthropic,
   piece: Piece,
@@ -198,14 +208,16 @@ async function callModel(
 
   // Streaming perché l'input è un PDF intero e il ragionamento allunga il
   // turno: una richiesta non-stream rischierebbe il timeout HTTP.
+  const { model, effort } = configurazioneModello();
+
   const message = await anthropic.messages
     .stream({
-      model: EXTRACTION_MODEL,
+      model,
       max_tokens: EXTRACTION_MAX_TOKENS,
       // Leggere una tabella e ricondurre le voci alle categorie è lavoro di
       // ragionamento: senza, gli errori di attribuzione aumentano.
       thinking: { type: "adaptive" },
-      output_config: { effort: "high" },
+      output_config: { effort },
       messages: [
         {
           role: "user",
@@ -232,7 +244,17 @@ async function callModel(
     testoPagine,
   };
 
-  return normalizeExtraction(parseExtractionOutput(text), ctx);
+  const risultato = normalizeExtraction(parseExtractionOutput(text), ctx);
+  risultato.uso = {
+    chiamate: 1,
+    tokenIngresso:
+      (message.usage.input_tokens ?? 0) +
+      (message.usage.cache_read_input_tokens ?? 0) +
+      (message.usage.cache_creation_input_tokens ?? 0),
+    tokenUscita: message.usage.output_tokens ?? 0,
+  };
+
+  return risultato;
 }
 
 // Il tetto di token per richiesta dipende dal tier dell'account e non è noto
@@ -357,8 +379,17 @@ export default async (req: Request) => {
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
+    // L'AI Gateway di Netlify si inserisce da solo negli SDK supportati dentro
+    // le funzioni e fattura l'inferenza sui crediti del piano — lo stesso monte
+    // che paga l'hosting. È già successo: 6,15 $ di inferenza sono costati
+    // 1.106 crediti e hanno messo offline il sito. Un baseURL esplicito ha la
+    // precedenza sulla configurazione iniettata, quindi le chiamate tornano su
+    // Anthropic, dove la spesa è visibile e non può spegnere il condominio.
+    // Resta sovrascrivibile da variabile d'ambiente, per tornare indietro senza
+    // un rilascio.
     const anthropic = new Anthropic({
       apiKey: anthropicApiKey,
+      baseURL: Netlify.env.get("ANTHROPIC_BASE_URL") ?? "https://api.anthropic.com",
       timeout: 4 * 60_000,
       maxRetries: 2,
     });
@@ -488,6 +519,11 @@ export default async (req: Request) => {
     ]
       .filter(Boolean)
       .join(" ");
+
+    console.log(
+      `Estrazione completata: ${extracted.uso.chiamate} chiamate a ${configurazioneModello().model}, ` +
+        `${extracted.uso.tokenIngresso} token in ingresso, ${extracted.uso.tokenUscita} in uscita`
+    );
 
     await store.setJSON(jobId, { status: "done", data: extracted });
   } catch (error) {

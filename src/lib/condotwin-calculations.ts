@@ -1,4 +1,4 @@
-import type { Impianto, Pagamento } from "@/lib/types";
+import type { Impianto, Pagamento, UsoModello } from "@/lib/types";
 
 // Quota mensile di un appartamento
 export function quotaMensile(millesimi: number, consuntivoAnnuo: number): number {
@@ -51,6 +51,15 @@ export function formatEuro(value: number | null | undefined): string {
     currency: "EUR",
     maximumFractionDigits: 0,
   }).format(value ?? 0);
+}
+
+// Il costo di un'estrazione, detto in modo leggibile. Non è il prezzo in euro
+// — quello dipende dal modello e dal listino — ma è il dato che lo determina,
+// ed è l'unico che l'applicazione può conoscere con certezza.
+export function formatUso(uso: UsoModello | undefined): string {
+  if (!uso?.chiamate) return "";
+  const migliaia = (n: number) => `${Math.round(n / 100) / 10}k`;
+  return `Analisi: ${uso.chiamate} ${uso.chiamate === 1 ? "chiamata" : "chiamate"} al modello, ${migliaia(uso.tokenIngresso)} token in ingresso e ${migliaia(uso.tokenUscita)} in uscita.`;
 }
 
 export const MESI_LABEL = [

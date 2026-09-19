@@ -27,7 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CampoImporto } from "@/components/estrazione/CampoImporto";
 import { ControlliBilancio } from "@/components/estrazione/ControlliBilancio";
-import { formatEuro } from "@/lib/condotwin-calculations";
+import { formatEuro, formatUso } from "@/lib/condotwin-calculations";
 import type { CampoImporto as CampoImportoKey, ExtractedBilancio, UploadedFile } from "@/lib/types";
 
 // Un documento già caricato in passato e ancora in archivio: si rianalizza
@@ -60,6 +60,7 @@ export function AggiungiBilancio({
   const [annoTesto, setAnnoTesto] = useState("");
   const [documenti, setDocumenti] = useState<UploadedFile[]>([]);
   const [note, setNote] = useState("");
+  const [uso, setUso] = useState("");
   const [lavorando, setLavorando] = useState(false);
   const [stato, setStato] = useState("");
   const [errore, setErrore] = useState<string | null>(null);
@@ -72,6 +73,7 @@ export function AggiungiBilancio({
     setAnnoTesto("");
     setDocumenti([]);
     setNote("");
+    setUso("");
     setConfermato(false);
     setStato("");
     if (inputRef.current) inputRef.current.value = "";
@@ -120,6 +122,7 @@ export function AggiungiBilancio({
       setAnnoTesto(estratto.anno ? String(estratto.anno) : "");
       setDocumenti(risultato.documenti);
       setNote(risultato.note);
+      setUso(formatUso(risultato.uso));
     } catch (err) {
       setErrore(messaggioErrore(err));
     } finally {
@@ -322,6 +325,8 @@ export function AggiungiBilancio({
             {note && (
               <p className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">{note}</p>
             )}
+
+            {uso && <p className="text-xs text-muted-foreground">{uso}</p>}
 
             {daConfermare && (
               <label className="flex items-start gap-2 rounded-md border border-warning/40 px-3 py-2 text-sm">

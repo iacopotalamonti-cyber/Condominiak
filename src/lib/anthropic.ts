@@ -21,8 +21,24 @@ import type {
 const TOLLERANZA_QUADRATURA = 1;
 
 // I bilanci sono tabelle fitte di numeri e l'errore di lettura non si vede:
-// vale la pena del modello più capace, con il ragionamento acceso.
+// vale la pena del modello più capace, con il ragionamento acceso. Restano
+// però la voce di spesa più grossa dell'applicazione, e ora che la quadratura
+// e la verifica sul PDF dicono se la qualità regge, provare un modello più
+// economico è un esperimento misurabile: sono sovrascrivibili da variabile
+// d'ambiente, così si cambia senza un rilascio.
 export const EXTRACTION_MODEL = "claude-opus-5";
+export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
+
+export const EXTRACTION_EFFORT: Effort = "high";
+
+// Un refuso in una variabile d'ambiente non deve far fallire ogni estrazione
+// con un 400: un valore non riconosciuto ricade sul predefinito.
+const EFFORT_AMMESSI: readonly Effort[] = ["low", "medium", "high", "xhigh", "max"];
+
+export function effortValido(valore: string | undefined): Effort {
+  const effort = EFFORT_AMMESSI.find((ammesso) => ammesso === valore);
+  return effort ?? EXTRACTION_EFFORT;
+}
 // Con il ragionamento attivo i token di thinking rientrano in questo tetto: in
 // streaming non c'è il rischio di timeout HTTP, e uno spazio più largo evita
 // che la risposta venga troncata a metà JSON.
@@ -581,6 +597,7 @@ export function emptyExtraction(): ExtractionResult {
     imp: mapImpianti(() => false),
     impDet: {},
     documenti: [],
+    uso: { chiamate: 0, tokenIngresso: 0, tokenUscita: 0 },
     trovati: 0,
     totale: TOTALE_CAMPI,
     confidence: { info: 0, unita: 0, bilanci: 0, spese: 0, imp: 0 },
@@ -646,6 +663,9 @@ export function normalizeExtraction(raw: unknown, ctx: ContestoEstrazione): Extr
     imp: mapImpianti((t) => imp[t] === true),
     impDet: normalizeImpDet(r.impDet),
     documenti: [],
+    // Lo riempie chi ha fatto la chiamata: qui si conosce la risposta, non il
+    // suo costo.
+    uso: { chiamate: 0, tokenIngresso: 0, tokenUscita: 0 },
     trovati: 0,
     totale: TOTALE_CAMPI,
     confidence: {
@@ -716,6 +736,11 @@ function mergePair(a: ExtractionResult, b: ExtractionResult): ExtractionResult {
     imp: mapImpianti((t) => a.imp[t] || b.imp[t]),
     impDet: mergeImpDet(a.impDet, b.impDet),
     documenti: a.documenti.length ? a.documenti : b.documenti,
+    uso: {
+      chiamate: a.uso.chiamate + b.uso.chiamate,
+      tokenIngresso: a.uso.tokenIngresso + b.uso.tokenIngresso,
+      tokenUscita: a.uso.tokenUscita + b.uso.tokenUscita,
+    },
     trovati: 0,
     totale: TOTALE_CAMPI,
     confidence: {

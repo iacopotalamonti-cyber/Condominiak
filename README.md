@@ -98,6 +98,30 @@ Quando i conti di un esercizio non tornano, l'estrazione rilegge una volta sola
 il tratto di documento da cui vengono quegli importi, per intero: la causa più
 frequente è una tabella tagliata a metà fra due blocchi di pagine.
 
+## Costo dell'inferenza
+
+Le chiamate al modello escono **direttamente verso `api.anthropic.com`**, con un
+`baseURL` esplicito. Non è un dettaglio: dentro una Netlify Function l'AI Gateway
+si inserisce da solo negli SDK supportati e fattura l'inferenza sui crediti del
+piano — lo stesso monte che paga l'hosting. È già costato un sito offline
+(6,15 $ di inferenza = 1.106 crediti su 1.000 disponibili). Con il `baseURL`
+esplicito la spesa AI resta su Anthropic, dove è visibile, e non può più
+spegnere l'applicazione.
+
+Due variabili d'ambiente opzionali permettono di cambiare la leva di costo senza
+un rilascio:
+
+```bash
+EXTRACTION_MODEL=claude-sonnet-5   # default: claude-opus-5
+EXTRACTION_EFFORT=medium           # low | medium | high | xhigh | max
+ANTHROPIC_BASE_URL=                # per tornare al gateway, se serve
+```
+
+Provare un modello più economico è un esperimento misurabile e non una
+scommessa: la colonna Quadratura e i badge di verifica dicono se la qualità
+regge. Ogni estrazione riporta quante chiamate e quanti token è costata, in
+interfaccia e nei log della funzione.
+
 ## Deploy su Netlify
 
 Il repository include `netlify.toml` (build command, plugin Next.js, header

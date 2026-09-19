@@ -320,6 +320,14 @@ export interface ExtractedImpiantiDettagli {
   citofono?: ExtractedImpiantoDettaglio;
 }
 
+// Quanto è costata un'estrazione, in token. Senza questo dato la spesa AI si
+// scopre solo dalla fattura — o, come è successo, da un sito spento.
+export interface UsoModello {
+  chiamate: number;
+  tokenIngresso: number;
+  tokenUscita: number;
+}
+
 export interface ExtractionResult {
   info: ExtractedInfo;
   unita: ExtractedUnita[];
@@ -329,6 +337,7 @@ export interface ExtractionResult {
   // I documenti da cui viene l'estrazione, per riaprire il PDF alla pagina
   // indicata dalla fonte.
   documenti: UploadedFile[];
+  uso: UsoModello;
   trovati: number;
   totale: number;
   confidence: {

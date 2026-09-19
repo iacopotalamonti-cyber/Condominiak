@@ -194,7 +194,7 @@ export default async function FornitoriPage({
       {role === "admin" && movimenti.length > 0 && archiviati.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Rileggi i documenti</CardTitle>
+            <CardTitle className="text-base">Rileggi un documento</CardTitle>
           </CardHeader>
           <CardContent>
             <EstraiFornitori condominiumId={condominium.id} archiviati={archiviati} />

@@ -2,7 +2,15 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { TOLLERANZA_QUADRATURA, esercizi, esercizioCorrente, totaleEsercizio } from "../bilancio.ts";
-import { controlliBilancio, bilancioVuoto } from "../anthropic.ts";
+import {
+  EXTRACTION_EFFORT,
+  bilancioVuoto,
+  controlliBilancio,
+  effortValido,
+  emptyExtraction,
+  mergeExtractions,
+} from "../anthropic.ts";
+import { formatUso } from "../condotwin-calculations.ts";
 import type { Bilancio, Spesa } from "../types.ts";
 
 function bilancio(anno: number, campi: Partial<Bilancio> = {}): Bilancio {
@@ -151,4 +159,24 @@ test("estrazione e interfaccia usano la stessa tolleranza", () => {
   assert.equal(totaleEsercizio(2024, { totale_documento: fuori.totale, consuntivo: null }, [
     { importo: 1000 },
   ]).quadra, false);
+});
+
+// La leva di costo più grossa dell'applicazione è il modello: deve essere
+// cambiabile senza un rilascio, e un refuso nella variabile d'ambiente non
+// deve far fallire ogni estrazione con un 400.
+test("un effort non riconosciuto ricade sul predefinito", () => {
+  assert.equal(effortValido("low"), "low");
+  assert.equal(effortValido("max"), "max");
+  assert.equal(effortValido("altissimo"), EXTRACTION_EFFORT);
+  assert.equal(effortValido(""), EXTRACTION_EFFORT);
+  assert.equal(effortValido(undefined), EXTRACTION_EFFORT);
+});
+
+test("il consumo di token si somma fra i blocchi analizzati", () => {
+  const a = { ...emptyExtraction(), uso: { chiamate: 1, tokenIngresso: 30000, tokenUscita: 2000 } };
+  const b = { ...emptyExtraction(), uso: { chiamate: 1, tokenIngresso: 28000, tokenUscita: 1500 } };
+
+  const merged = mergeExtractions([a, b]);
+  assert.deepEqual(merged.uso, { chiamate: 2, tokenIngresso: 58000, tokenUscita: 3500 });
+  assert.equal(formatUso(merged.uso), "Analisi: 2 chiamate al modello, 58k token in ingresso e 3.5k in uscita.");
 });
