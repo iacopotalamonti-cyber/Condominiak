@@ -9,8 +9,12 @@
 # questo repository: tenerlo privato non è un dettaglio.
 #
 # Serve un solo segreto, in Settings → Secrets and variables → Actions:
-#   SUPABASE_DB_URL   la stringa di connessione del progetto di produzione
-#                     (Supabase → Connect → Connection string → URI)
+#   SUPABASE_DB_URL   la stringa di connessione del progetto di produzione,
+#                     presa da Supabase → Connect → Session pooler.
+#
+# Session pooler e non connessione diretta: db.<ref>.supabase.co risponde solo
+# su IPv6, e i runner di GitHub sono solo IPv4. Nemmeno Transaction pooler, che
+# sta sulla porta 6543 e non regge pg_dump.
 #
 # Un backup non provato non è un backup: una volta l'anno va ripristinato su
 # staging per verificare che funzioni.
