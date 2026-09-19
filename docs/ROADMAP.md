@@ -22,7 +22,9 @@ ogni rilascio successivo.
       alla produzione. **Resta da fare a mano**: su Netlify, in Deploy contexts →
       Deploy Previews, impostare le variabili Supabase dello staging, così le
       anteprime non scrivono sul database vero
-- [ ] Tracciamento errori (Sentry) su app e background function
+- [x] Tracciamento errori (Sentry) su browser, server e funzione di estrazione.
+      **Resta da fare a mano**: impostare `NEXT_PUBLIC_SENTRY_DSN` su Netlify
+      (e `NEXT_PUBLIC_SENTRY_ENV`), altrimenti non parte nulla
 - [x] CORS ristretto a `https://www.condominiak.me` (era `*`)
 - [x] Backup giornaliero del database in `.github/workflows/backup.yml`.
       **Resta da fare a mano**: aggiungere il segreto `SUPABASE_DB_URL` nelle

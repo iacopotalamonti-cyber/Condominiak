@@ -83,8 +83,7 @@ sono affatto:
 - **Lo staging esiste ma Netlify non lo usa ancora**: finché le anteprime di
   deploy non puntano al progetto di staging, continuano a scrivere sul database
   di produzione.
-- **Nessun tracciamento errori**: se una funzione di estrazione fallisce per un
-  utente, lo sappiamo solo se ce lo racconta.
+- **Sentry è collegato ma spento finché manca il DSN su Netlify.**
 - **Il primo backup non è ancora girato**: il workflow esiste
   (`.github/workflows/backup.yml`) ma resta fermo finché nel repository non c'è
   il segreto `SUPABASE_DB_URL`. Fino ad allora il database, che contiene dati
