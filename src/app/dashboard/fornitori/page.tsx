@@ -10,7 +10,11 @@ import { FonteLink } from "@/components/estrazione/FonteLink";
 import type { DocumentoArchiviato } from "@/components/dashboard/AggiungiBilancio";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CATEGORIE_SPESA_LABEL, formatEuro } from "@/lib/condotwin-calculations";
+import {
+  CATEGORIE_SPESA_LABEL,
+  formatEuro,
+  formatEuroPreciso,
+} from "@/lib/condotwin-calculations";
 import { SENZA_FORNITORE, perFornitore } from "@/lib/fornitori";
 import type { Fornitore, Movimento } from "@/lib/types";
 
@@ -176,7 +180,7 @@ export default async function FornitoriPage({
                             {m.data ? `${formatData(m.data)} — ` : ""}
                             {m.descrizione || CATEGORIE_SPESA_LABEL[m.categoria] || m.categoria}
                           </span>
-                          <span className="tabular-nums">{formatEuro(Number(m.importo))}</span>
+                          <span className="tabular-nums">{formatEuroPreciso(Number(m.importo))}</span>
                         </div>
                         <FonteLink
                           pagina={m.fonte_pagina}

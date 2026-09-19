@@ -449,15 +449,35 @@ export function verificaImporto(
 ): EsitoVerifica {
   if (!valore || !pagina || !testoPagine.size) return "non_verificabile";
 
-  const cifre = cifreImporto(valore);
-  if (cifre.length < 3) return "non_verificabile";
-
   const vicine = [pagina, pagina - 1, pagina + 1]
     .map((p) => testoPagine.get(p))
     .filter((testo): testo is string => Boolean(testo && testo.trim()));
 
   if (!vicine.length) return "non_verificabile";
+
+  const cifre = cifreImporto(valore);
+
+  // Poche cifre ("55") ricorrono dentro qualunque altro numero della pagina:
+  // cercarle nel flusso delle sole cifre darebbe un "verificato" preso a caso.
+  // Prima questi importi venivano dichiarati non verificabili, il che metteva
+  // un punto interrogativo accanto a ogni spesa sotto i 100 € — cioè a buona
+  // parte dei piccoli interventi. Si cerca invece la forma con cui i
+  // rendiconti li stampano, centesimi compresi.
+  if (cifre.length < 3) {
+    const stampato = formaStampata(valore);
+    return vicine.some((testo) => stampato.test(testo)) ? "verificata" : "non_trovata";
+  }
+
   return vicine.some((testo) => soleCifre(testo).includes(cifre)) ? "verificata" : "non_trovata";
+}
+
+// "55,00" o "55.00", non preceduto né seguito da altre cifre: esclude il 55
+// dentro 1.550,00 e quello dentro un numero di fattura.
+function formaStampata(valore: number): RegExp {
+  const assoluto = Math.round(Math.abs(valore) * 100);
+  const intero = Math.floor(assoluto / 100);
+  const decimali = String(assoluto % 100).padStart(2, "0");
+  return new RegExp(`(?<![\\d.,])${intero}[.,]${decimali}(?![\\d])`);
 }
 
 // -----------------------------------------------------------------------
