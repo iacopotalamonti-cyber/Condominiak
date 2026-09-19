@@ -5,7 +5,9 @@ import { getDashboardContext } from "@/lib/dashboard-context";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { AnnoSelector } from "@/components/dashboard/AnnoSelector";
 import { FornitoriChart } from "@/components/dashboard/FornitoriChart";
+import { EstraiFornitori } from "@/components/dashboard/EstraiFornitori";
 import { FonteLink } from "@/components/estrazione/FonteLink";
+import type { DocumentoArchiviato } from "@/components/dashboard/AggiungiBilancio";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CATEGORIE_SPESA_LABEL, formatEuro } from "@/lib/condotwin-calculations";
@@ -19,7 +21,7 @@ export default async function FornitoriPage({
 }: {
   searchParams: Promise<{ anno?: string }>;
 }) {
-  const { condominium } = await getDashboardContext();
+  const { role, condominium } = await getDashboardContext();
   const supabase = await createClient();
 
   const [{ data }, { data: datiFornitori }] = await Promise.all([
@@ -30,6 +32,21 @@ export default async function FornitoriPage({
       .order("anno", { ascending: false }),
     supabase.from("fornitori").select("*").eq("condominium_id", condominium.id),
   ]);
+
+  // I documenti già caricati restano in archivio: da qui si rileggono senza
+  // doverli ricaricare.
+  const { data: datiBilanci } = await supabase
+    .from("bilanci")
+    .select("anno, documento_path")
+    .eq("condominium_id", condominium.id)
+    .not("documento_path", "is", null);
+
+  const archiviati: DocumentoArchiviato[] = ((datiBilanci ?? []) as {
+    anno: number;
+    documento_path: string;
+  }[])
+    .map((b) => ({ anno: b.anno, nome: nomeFile(b.documento_path), path: b.documento_path }))
+    .sort((a, b) => b.anno - a.anno);
 
   const movimenti = (data ?? []) as Movimento[];
   const anagrafica = (datiFornitori ?? []) as Fornitore[];
@@ -75,12 +92,13 @@ export default async function FornitoriPage({
           <CardContent className="flex flex-col items-start gap-2 py-10 text-sm text-muted-foreground">
             <p>Nessun movimento registrato.</p>
             <p>
-              Il dettaglio per fornitore si ricava dalle singole righe del rendiconto. I documenti
-              già caricati sono ancora in archivio: vai in{" "}
-              <strong>Analisi spese → Aggiungi un bilancio</strong> e usa{" "}
-              <strong>Rianalizza</strong> sul documento dell&apos;anno che ti interessa — non serve
-              ricaricarlo.
+              Il dettaglio per fornitore si ricava dalle singole righe del rendiconto, e quelle
+              stanno solo nel documento: quello che è già in archivio sono i totali per categoria,
+              non le righe che li compongono.
             </p>
+            {role === "admin" && archiviati.length > 0 && (
+              <EstraiFornitori condominiumId={condominium.id} archiviati={archiviati} />
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -173,6 +191,17 @@ export default async function FornitoriPage({
         </>
       )}
 
+      {role === "admin" && movimenti.length > 0 && archiviati.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Rileggi i documenti</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <EstraiFornitori condominiumId={condominium.id} archiviati={archiviati} />
+          </CardContent>
+        </Card>
+      )}
+
       {nonAttribuito && (
         <p className="text-xs text-muted-foreground">
           «{SENZA_FORNITORE}» raccoglie le righe che non nominano una controparte — consumi a
@@ -187,4 +216,13 @@ export default async function FornitoriPage({
 function formatData(data: string): string {
   const [anno, mese, giorno] = data.split("-");
   return `${giorno}/${mese}/${anno}`;
+}
+
+// I file in storage sono "<prefisso>/<utente>/<uuid>-<nome vero>": il prefisso
+// è un UUID e contiene trattini, quindi va tolto per intero.
+const PREFISSO_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-/i;
+
+function nomeFile(path: string): string {
+  const base = path.split("/").pop() ?? path;
+  return base.replace(PREFISSO_UUID, "");
 }

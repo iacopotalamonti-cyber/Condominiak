@@ -200,7 +200,9 @@ Restituisci SOLO JSON valido, senza markdown, senza testo aggiuntivo, con questo
 ${EXTRACTION_SCHEMA}
 
 - Compila SOLO "bilanci", con una sola voce: l'anno di questo bilancio, i suoi
-  importi e le sue voci di spesa. Lascia tutto il resto ai valori vuoti dello schema
+  importi, le sue voci di spesa E I SUOI MOVIMENTI, che sono la parte più
+  importante quando il documento elenca le singole righe. Lascia tutto il resto
+  ai valori vuoti dello schema
 
 ${REGOLE_IMPORTI}
 
