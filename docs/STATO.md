@@ -69,6 +69,15 @@ sono affatto:
 - **`npm run lint` fallisce già oggi**: un `any` in
   `src/app/api/invite-resident/route.ts:34`. Va sistemato prima di mettere il
   lint in CI, altrimenti la CI nasce rossa.
+- **Un utente = un solo appartamento**: `getDashboardContext`
+  (`src/lib/dashboard-context.ts:26` e `:37`) usa `maybeSingle()` sia sui
+  condomini posseduti sia sulle unità. Chi ha due appartamenti non ottiene una
+  riga e finisce rimbalzato all'onboarding. Incompatibile con il prodotto deciso.
+- **Dai verbali non si estrae nulla**: sono accettati e archiviati, ma lo schema
+  di estrazione copre solo anagrafica, unità, bilanci, spese e impianti. Nessuna
+  delibera diventa un dato.
+- **I fornitori nascono solo dall'estrazione** (`src/lib/fornitori-server.ts`):
+  dall'interfaccia non se ne può aggiungere o correggere uno a mano.
 - **Nessun ambiente di staging**: il deploy Netlify va diritto in produzione, su
   un unico progetto Supabase. Una migrazione sbagliata tocca i dati veri.
 - **Nessun `.env.local.example`**: il README lo cita (`cp .env.local.example .env.local`)

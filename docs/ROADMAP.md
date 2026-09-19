@@ -41,7 +41,9 @@ quel cliente per smettere di usare il suo strumento attuale, niente altro.
 - [ ] (servizio 1)
 - [ ] (servizio 2)
 - [ ] (servizio 3)
-- [ ] Privacy policy, termini di servizio, DPA con l'amministratore
+- [ ] Privacy policy, termini di servizio, informativa ai condòmini, e verifica
+      legale dell'impianto "chi vede cosa" descritto in `SERVIZI.md` — prima del
+      primo condominio che non è il nostro
 - [ ] Test end-to-end (Playwright) sul percorso completo: registrazione → onboarding → dashboard
 
 **Fatto quando**: un amministratore vero ci lavora sopra per un mese senza tornare indietro.
