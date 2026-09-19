@@ -24,6 +24,7 @@ import {
   normalizeExtraction,
   parseExtractionOutput,
 } from "../../src/lib/anthropic";
+import { riconciliaBilancio, spiegaRiconciliazione } from "../../src/lib/riconciliazione";
 import type { ExtractedBilancio, ExtractionResult, UploadedFile } from "../../src/lib/types";
 
 const BUCKET = "documenti-condominiali";
@@ -500,6 +501,32 @@ export default async (req: Request) => {
 
     let extracted = mergeExtractions(results);
 
+    // Prima di rileggere a pagamento: la riconciliazione è aritmetica, gira in
+    // locale e costa zero. Il totale stampato sul documento fa da arbitro su
+    // quali righe sono spese vere e quali sono la loro eco dentro i prospetti
+    // di riparto. Quello che si aggiusta qui non va chiesto di nuovo al
+    // modello.
+    const noteRiconciliazione: string[] = [];
+    extracted.bilanci = extracted.bilanci.map((bilancio) => {
+      // Le pagine sono numerate per documento: passare quelle di riparto ha
+      // senso solo se i movimenti di questo esercizio vengono da un documento
+      // solo. Negli altri casi decide il confronto col totale, che non si
+      // lascia ingannare da una numerazione mescolata.
+      const documenti = new Set(
+        bilancio.movimenti.map((m) => m.fonte?.documento).filter(Boolean) as string[]
+      );
+      const sorgente = documenti.size === 1 ? testoDocumenti.get([...documenti][0]) : undefined;
+      const riparto = sorgente ? pagineDiRiparto(sorgente) : [];
+
+      const esito = riconciliaBilancio(bilancio, riparto);
+      const spiegazione = spiegaRiconciliazione(bilancio.anno, esito.riconciliazione);
+      if (spiegazione) {
+        noteRiconciliazione.push(spiegazione);
+        console.log(spiegazione);
+      }
+      return esito.bilancio;
+    });
+
     // Seconda passata solo sugli esercizi che non quadrano. Le riletture
     // vengono messe per prime nella fusione, così a parità di fonte vince la
     // lettura fatta sulla tabella intera e l'altra resta come conflitto.
@@ -550,6 +577,7 @@ export default async (req: Request) => {
 
     const problemi = riepilogoControlli(extracted.bilanci);
     extracted.note = [
+      ...noteRiconciliazione,
       extracted.note,
       problemi && `Da verificare: ${problemi}`,
       failures.length && `Non analizzati: ${failures.join("; ")}.`,
