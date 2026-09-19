@@ -59,8 +59,12 @@ ricostruito dal database di produzione il 19/09/2026: tabelle, indici, policy RL
 e bucket storage. Su un database vuoto va eseguito per primo; le quattro
 migrazioni datate che lo seguono diventano innocue.
 
-Progetto Supabase di produzione: `mqmedyjwjzxwuxqgyahy` (organizzazione
-"Condominial", regione eu-west-1).
+Progetti Supabase (organizzazione "Condominial", eu-west-1):
+
+- produzione — `mqmedyjwjzxwuxqgyahy`
+- staging — `shzxqeyyxjhultofwzfz`, creato il 19/09/2026 applicando la migrazione
+  iniziale: stesse 9 tabelle, 17 policy, 3 policy storage, 19 indici, 1 bucket.
+  È anche la prova che la migrazione ricostruisce l'ambiente da zero.
 
 ## Cosa manca per poter chiamare "produzione" la produzione
 
@@ -76,19 +80,19 @@ sono affatto:
   delibera diventa un dato.
 - **I fornitori nascono solo dall'estrazione** (`src/lib/fornitori-server.ts`):
   dall'interfaccia non se ne può aggiungere o correggere uno a mano.
-- **Nessun ambiente di staging**: il deploy Netlify va diritto in produzione, su
-  un unico progetto Supabase. Una migrazione sbagliata tocca i dati veri.
+- **Lo staging esiste ma Netlify non lo usa ancora**: finché le anteprime di
+  deploy non puntano al progetto di staging, continuano a scrivere sul database
+  di produzione.
 - **Nessun tracciamento errori**: se una funzione di estrazione fallisce per un
   utente, lo sappiamo solo se ce lo racconta.
-- **Nessun backup, punto.** La dashboard Supabase riporta "No backups", e il
-  database contiene già dati reali (168 pagamenti, 67 movimenti, 21 fornitori).
-  Sul piano Free i backup automatici non ci sono: oggi un errore su una tabella
-  non è recuperabile.
+- **Il primo backup non è ancora girato**: il workflow esiste
+  (`.github/workflows/backup.yml`) ma resta fermo finché nel repository non c'è
+  il segreto `SUPABASE_DB_URL`. Fino ad allora il database, che contiene dati
+  reali, non ha alcuna copia.
 - **L'invito ai condòmini non collega nessuno** (verificato): la policy
   `resident_access` su `unita` impedisce a un invitato di rivendicare la propria
   unità, e l'update client-side fallisce in silenzio. Vedi `SERVIZI.md` → "Come
   si entra", punto 4.
-- **CORS aperto** su tutte le API (`netlify.toml`: `Access-Control-Allow-Origin = "*"`).
 - **Nessun pagamento, nessuna fatturazione, nessun contratto**: l'app non ha
   ancora un modo per incassare.
 - **Nessun documento legale**: privacy policy, termini, registro trattamenti GDPR

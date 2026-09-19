@@ -8,7 +8,11 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
+# Le route sotto /api sono chiamate dall'applicazione stessa, che gira sullo
+# stesso dominio: un'origine esplicita basta e avanza. Con "*" qualunque sito
+# poteva far partire richieste alle nostre API dal browser di un utente.
 [[headers]]
   for = "/api/*"
   [headers.values]
-    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Origin = "https://www.condominiak.me"
+    Vary = "Origin"

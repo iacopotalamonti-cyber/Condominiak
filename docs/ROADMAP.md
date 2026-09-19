@@ -17,10 +17,17 @@ ogni rilascio successivo.
 - [x] `.env.local.example` nel repo, con tutte le variabili e un commento per ciascuna
 - [x] Schema iniziale del database esportato in `supabase/migrations/00000000000000_schema_iniziale.sql`, così l'ambiente si ricostruisce da zero
 - [x] CI su GitHub Actions: `lint` + `test` + `build` a ogni push e PR (il lint falliva già: sistemato)
-- [ ] Ambiente di staging: secondo progetto Supabase + deploy preview Netlify collegati
+- [x] Ambiente di staging: progetto Supabase `shzxqeyyxjhultofwzfz` ("Condominiak
+      Staging", eu-west-1), con lo schema iniziale applicato e verificato identico
+      alla produzione. **Resta da fare a mano**: su Netlify, in Deploy contexts →
+      Deploy Previews, impostare le variabili Supabase dello staging, così le
+      anteprime non scrivono sul database vero
 - [ ] Tracciamento errori (Sentry) su app e background function
-- [ ] Restringere il CORS in `netlify.toml` al solo dominio dell'app
-- [ ] Backup del database: oggi **non ne esiste nessuno** ("No backups" sul piano Free). Va creato, poi provato un ripristino
+- [x] CORS ristretto a `https://www.condominiak.me` (era `*`)
+- [x] Backup giornaliero del database in `.github/workflows/backup.yml`.
+      **Resta da fare a mano**: aggiungere il segreto `SUPABASE_DB_URL` nelle
+      impostazioni del repository, senza il quale il workflow fallisce
+- [ ] Provare un ripristino su staging: un backup non provato non è un backup
 
 **Fatto quando**: posso rompere il `main` e accorgermene dalla CI invece che da un cliente.
 
