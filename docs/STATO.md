@@ -63,12 +63,6 @@ dal solo repository. Vedi `ROADMAP.md` → Fase 0.
 Non sono funzionalità mancanti, sono i pezzi di infrastruttura che oggi non ci
 sono affatto:
 
-- **Nessuna CI**: `.github/` non esiste. `npm test`, `npm run lint` e
-  `npm run build` girano solo a mano. Una rottura arriva in produzione prima che
-  ce ne accorgiamo.
-- **`npm run lint` fallisce già oggi**: un `any` in
-  `src/app/api/invite-resident/route.ts:34`. Va sistemato prima di mettere il
-  lint in CI, altrimenti la CI nasce rossa.
 - **Un utente = un solo appartamento**: `getDashboardContext`
   (`src/lib/dashboard-context.ts:26` e `:37`) usa `maybeSingle()` sia sui
   condomini posseduti sia sulle unità. Chi ha due appartamenti non ottiene una
@@ -80,8 +74,6 @@ sono affatto:
   dall'interfaccia non se ne può aggiungere o correggere uno a mano.
 - **Nessun ambiente di staging**: il deploy Netlify va diritto in produzione, su
   un unico progetto Supabase. Una migrazione sbagliata tocca i dati veri.
-- **Nessun `.env.local.example`**: il README lo cita (`cp .env.local.example .env.local`)
-  ma il file non è nel repo.
 - **Nessun tracciamento errori**: se una funzione di estrazione fallisce per un
   utente, lo sappiamo solo se ce lo racconta.
 - **Nessun backup dichiarato** del database oltre a quello di default di Supabase.
