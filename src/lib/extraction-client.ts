@@ -82,8 +82,12 @@ export function messaggioErrore(err: unknown): string {
   if (/tempo massimo|timeout|ETIMEDOUT/i.test(raw)) {
     return "L'analisi ha superato il tempo massimo: riprova con meno documenti o con file più leggeri.";
   }
-  if (/Variabili d'ambiente mancanti/i.test(raw)) {
-    return "Configurazione del server incompleta: contatta l'assistenza.";
+  // I nomi delle variabili non sono un segreto, i loro valori sì: dirli
+  // trasforma la prossima segnalazione in una diagnosi invece che in un giro
+  // di domande.
+  const mancanti = raw.match(/Variabili d'ambiente mancanti:\s*(.+)/i);
+  if (mancanti) {
+    return `Configurazione del server incompleta: manca ${mancanti[1].trim()}. Va impostata fra le variabili d'ambiente del sito, poi serve un nuovo deploy.`;
   }
 
   return raw || "Errore sconosciuto";
