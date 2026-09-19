@@ -193,6 +193,11 @@ const REGOLE_BILANCI = `Regole sui bilanci:
   una sola voce. Non aggiungere anni per completare una serie
 - "anno" è l'esercizio a cui il bilancio si riferisce, non la data di
   approvazione né quella di stampa del documento
+- Un esercizio a cavallo di due anni solari (per esempio 01/07/2024-30/06/2025,
+  o un rendiconto intitolato "2024-2025") è UN SOLO esercizio, non due:
+  restituisci una sola voce, con "anno" uguale all'anno di CHIUSURA. Non
+  spezzare lo stesso rendiconto in due bilanci e non ripetere lo stesso totale
+  sotto due anni diversi
 - "prev" è il preventivo, "cons" il consuntivo, "fondo" il fondo di riserva
 - Ogni voce di spesa appartiene all'anno del proprio bilancio: non mescolare
   esercizi diversi nella stessa voce`;
@@ -1080,6 +1085,23 @@ export function controlliBilancio(bilancio: ExtractedBilancio): Controllo[] {
   }
 
   const somma = sommaSpese(bilancio.spese);
+
+  // Da un bilancio vuoto i controlli aritmetici non hanno niente da dire, e il
+  // silenzio veniva mostrato come un via libera verde. Peggio: salvarlo
+  // cancellava i dati buoni già in archivio per quell'anno. Zero importi non è
+  // un bilancio che quadra, è una lettura fallita.
+  const vuoto =
+    !somma && !bilancio.movimenti.length && !CAMPI_IMPORTO.some((c) => leggiImporto(bilancio, c));
+  if (vuoto) {
+    controlli.push({
+      campo: "",
+      livello: "errore",
+      messaggio:
+        "Da questo documento non è stato estratto nessun importo: la lettura è fallita. " +
+        "Riprova, oppure inserisci i valori a mano — non salvare così, cancelleresti i dati già in archivio.",
+    });
+    return controlli;
+  }
 
   if (somma && bilancio.totale && Math.abs(somma - bilancio.totale) > TOLLERANZA_QUADRATURA) {
     controlli.push({

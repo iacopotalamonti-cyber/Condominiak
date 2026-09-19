@@ -303,3 +303,20 @@ test("la correzione dice al modello quanto e in che direzione sbaglia", () => {
   assert.match(difetto, /6\.?964,55/);
   assert.doesNotMatch(difetto, /pagine/);
 });
+
+test("un bilancio senza nessun importo è una lettura fallita, non un bilancio che quadra", () => {
+  const controlli = controlliBilancio(bilancioVuoto(2025));
+
+  // Senza questo controllo i controlli aritmetici tacevano, l'interfaccia
+  // mostrava il verde «i conti tornano» e il salvataggio cancellava i dati
+  // buoni già in archivio per quell'anno.
+  assert.ok(controlli.some((c) => c.livello === "errore" && /nessun importo/.test(c.messaggio)));
+});
+
+test("un bilancio con un solo importo non viene scambiato per vuoto", () => {
+  const bilancio = bilancioVuoto(2025);
+  bilancio.totale = 27748.85;
+
+  const controlli = controlliBilancio(bilancio);
+  assert.equal(controlli.filter((c) => /nessun importo/.test(c.messaggio)).length, 0);
+});
