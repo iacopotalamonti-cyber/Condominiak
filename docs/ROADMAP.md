@@ -29,7 +29,6 @@ ogni rilascio successivo.
 Non è lavoro di codice ed è il collo di bottiglia vero.
 
 - [ ] `docs/SERVIZI.md` Parte B compilata, almeno le cinque domande iniziali
-- [ ] Nome del prodotto deciso (CondoTwin o Condominiak) e allineato ovunque
 - [ ] Primo cliente reale individuato, con i suoi documenti veri per le prove
 
 **Fatto quando**: so quali tre servizi costruire dopo e per chi.

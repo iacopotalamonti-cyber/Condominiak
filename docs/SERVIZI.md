@@ -10,7 +10,7 @@ Per ognuno servono cinque righe. Non di più, ma tutte e cinque — la quarta e 
 quinta sono quelle che di solito mancano e che fanno rifare il lavoro.
 
 ```
-### <Condominiak>
+### <Nome del servizio>
 
 - **Per chi**: amministratore | condomino | entrambi | (altro ruolo)
 - **Serve a**: il problema reale che risolve, in una frase

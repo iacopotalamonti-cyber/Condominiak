@@ -7,10 +7,8 @@ quando viene iniziata.
 
 ## Identità
 
-- Nome nel codice: **CondoTwin** (`package.json` → `"name": "condotwin"`, README, `src/lib/condotwin-calculations.ts`).
-- Nome del repository: **Condominiak**.
-- ⚠️ Decisione aperta: qual è il nome del prodotto. Finché non è deciso, ogni
-  nuova pagina/documento continua a usare due nomi diversi. Vedi `DECISIONI.md`.
+Il prodotto si chiama **Condominiak**, come il dominio. Il nome è allineato in
+tutto il codice (19/09/2026); non esistono più riferimenti a CondoTwin.
 
 ## Stack in uso
 
@@ -68,6 +66,9 @@ sono affatto:
 - **Nessuna CI**: `.github/` non esiste. `npm test`, `npm run lint` e
   `npm run build` girano solo a mano. Una rottura arriva in produzione prima che
   ce ne accorgiamo.
+- **`npm run lint` fallisce già oggi**: un `any` in
+  `src/app/api/invite-resident/route.ts:34`. Va sistemato prima di mettere il
+  lint in CI, altrimenti la CI nasce rossa.
 - **Nessun ambiente di staging**: il deploy Netlify va diritto in produzione, su
   un unico progetto Supabase. Una migrazione sbagliata tocca i dati veri.
 - **Nessun `.env.local.example`**: il README lo cita (`cp .env.local.example .env.local`)

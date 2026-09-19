@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
-import { CATEGORIE_SPESA_LABEL } from "@/lib/condotwin-calculations";
+import { CATEGORIE_SPESA_LABEL } from "@/lib/calcoli";
 import { CAMPI_IMPORTO } from "@/lib/anthropic";
 import { righeMovimenti } from "@/lib/movimenti";
 import { chiaveFornitore } from "@/lib/fornitori";

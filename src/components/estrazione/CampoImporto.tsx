@@ -5,7 +5,7 @@ import { BadgeCheck, CircleHelp, FileText, TriangleAlert } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { formatEuro } from "@/lib/condotwin-calculations";
+import { formatEuro } from "@/lib/calcoli";
 import { apriDocumento } from "@/lib/documenti-client";
 import { cn } from "@/lib/utils";
 import type { Fonte, ValoreScartato } from "@/lib/types";

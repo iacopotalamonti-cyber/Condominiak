@@ -1,4 +1,4 @@
-import { MESI_LABEL } from "@/lib/condotwin-calculations";
+import { MESI_LABEL } from "@/lib/calcoli";
 import { cn } from "@/lib/utils";
 import type { Pagamento, Unita } from "@/lib/types";
 

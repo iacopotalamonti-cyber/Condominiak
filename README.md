@@ -1,4 +1,4 @@
-# CondoTwin
+# Condominiak
 
 SaaS B2B per la gestione digitale di condomini italiani: upload documenti (bilanci,
 verbali, tabelle millesimali) → estrazione dati via AI (Claude) → dashboard
@@ -29,7 +29,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=      # solo server-side, mai esporre al client
 ANTHROPIC_API_KEY=
 NEXT_PUBLIC_APP_URL=
-NEXT_PUBLIC_APP_NAME=CondoTwin
+NEXT_PUBLIC_APP_NAME=Condominiak
 ```
 
 Lo schema del database (tabelle + RLS + bucket storage) è già applicato sul

@@ -30,13 +30,17 @@ resta comunque su ogni movimento: è provenienza.
 **2026 — Componenti UI scritti a mano in stile shadcn/ui, non una libreria di componenti.**
 Scartato: MUI, Chakra. Costo: ogni componente nuovo va scritto.
 
-## Aperte
+**19/09/2026 — Il prodotto si chiama Condominiak.**
+Finora convivevano due nomi: CondoTwin nel codice (`package.json`, README, un
+modulo di libreria), Condominiak nel repository. Vince Condominiak perché è già
+il dominio, e un dominio costa molto di più da cambiare di una stringa nel
+codice. Scartato: CondoTwin. Il modulo `condotwin-calculations.ts` è diventato
+`calcoli.ts` invece di `condominiak-calculations.ts`: il nome del prodotto dentro
+un nome di file è esattamente ciò che ha reso necessario questo lavoro, e i file
+vicini (`bilancio.ts`, `movimenti.ts`, `fornitori.ts`) già si chiamano per il
+dominio, non per il prodotto.
 
-**Nome del prodotto: CondoTwin o Condominiak?**
-Oggi convivono: `package.json`, README e `src/lib/condotwin-calculations.ts` dicono
-CondoTwin, il repository dice Condominiak. Da decidere prima di qualunque materiale
-rivolto a clienti; il rinominare il codice dopo costa poco, il rinominare un
-dominio e una fattura costa molto.
+## Aperte
 
 **Chi è il cliente pagante** — vedi le cinque domande in `SERVIZI.md`. È la
 decisione da cui dipendono multi-tenancy, prezzi e metà della roadmap.

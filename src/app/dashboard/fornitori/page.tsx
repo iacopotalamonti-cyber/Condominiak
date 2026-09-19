@@ -10,7 +10,7 @@ import { FonteLink } from "@/components/estrazione/FonteLink";
 import type { DocumentoArchiviato } from "@/components/dashboard/AggiungiBilancio";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CATEGORIE_SPESA_LABEL, formatEuro } from "@/lib/condotwin-calculations";
+import { CATEGORIE_SPESA_LABEL, formatEuro } from "@/lib/calcoli";
 import { SENZA_FORNITORE, perFornitore } from "@/lib/fornitori";
 import type { Fornitore, Movimento } from "@/lib/types";
 

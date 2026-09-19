@@ -2,7 +2,7 @@
 
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
-import { CATEGORIE_SPESA_LABEL, formatEuro } from "@/lib/condotwin-calculations";
+import { CATEGORIE_SPESA_LABEL, formatEuro } from "@/lib/calcoli";
 import type { Spesa } from "@/lib/types";
 
 interface SpeseChartProps {

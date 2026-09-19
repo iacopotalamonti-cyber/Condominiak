@@ -5,7 +5,7 @@ import { AggiungiBilancio } from "@/components/dashboard/AggiungiBilancio";
 import { AnnoSelector } from "@/components/dashboard/AnnoSelector";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FonteLink } from "@/components/estrazione/FonteLink";
-import { CATEGORIE_SPESA_LABEL, formatEuro } from "@/lib/condotwin-calculations";
+import { CATEGORIE_SPESA_LABEL, formatEuro } from "@/lib/calcoli";
 import { ORIGINE_TOTALE_LABEL, esercizi } from "@/lib/bilancio";
 import type { DocumentoArchiviato } from "@/components/dashboard/AggiungiBilancio";
 import type { Bilancio, Spesa } from "@/lib/types";

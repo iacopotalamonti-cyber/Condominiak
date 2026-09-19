@@ -6,7 +6,7 @@ import { Loader2, RefreshCw } from "lucide-react";
 
 import { analizzaDocumenti, messaggioErrore } from "@/lib/extraction-client";
 import { Button } from "@/components/ui/button";
-import { formatUso } from "@/lib/condotwin-calculations";
+import { formatUso } from "@/lib/calcoli";
 import type { DocumentoArchiviato } from "@/components/dashboard/AggiungiBilancio";
 
 interface EstraiFornitoriProps {

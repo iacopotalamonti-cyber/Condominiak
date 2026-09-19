@@ -11,7 +11,7 @@ import {
   formatEuro,
   percentualeMorosita,
   scoreEdificio,
-} from "@/lib/condotwin-calculations";
+} from "@/lib/calcoli";
 import { esercizioCorrente } from "@/lib/bilancio";
 import type { Bilancio, Impianto, Pagamento, Spesa, Unita } from "@/lib/types";
 

@@ -9,7 +9,7 @@ import type {
   Fonte,
   UploadedFile,
 } from "@/lib/types";
-import { CATEGORIE_SPESA_LABEL } from "@/lib/condotwin-calculations";
+import { CATEGORIE_SPESA_LABEL } from "@/lib/calcoli";
 import { righeMovimenti } from "@/lib/movimenti";
 import { chiaveFornitore } from "@/lib/fornitori";
 import { risolviFornitori } from "@/lib/fornitori-server";

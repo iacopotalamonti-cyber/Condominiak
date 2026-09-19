@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { FonteLink } from "@/components/estrazione/FonteLink";
-import { formatEuro, variazioneAnnua } from "@/lib/condotwin-calculations";
+import { formatEuro, variazioneAnnua } from "@/lib/calcoli";
 import { esercizi } from "@/lib/bilancio";
 import type { Bilancio, FonteSalvata, Spesa } from "@/lib/types";
 
