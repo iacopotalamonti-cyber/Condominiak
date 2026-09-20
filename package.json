@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test --experimental-strip-types \"src/lib/__tests__/*.test.ts\""
+    "test": "node --test --experimental-strip-types \"src/lib/__tests__/*.test.ts\"",
+    "pulisci-storage": "node --env-file=.env.local scripts/pulisci-storage.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",
