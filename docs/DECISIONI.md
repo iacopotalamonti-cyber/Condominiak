@@ -49,6 +49,26 @@ riparto, rendiconto e contabilità da produrre, non da leggere. Conseguenza: il
 prodotto è uno strumento di verifica, e la qualità dell'estrazione dai PDF non è
 una funzionalità fra le altre — è il prodotto. Vedi `SERVIZI.md` Parte B.
 
+**20/09/2026 — I rendiconti si leggono con un parser, non con il modello.**
+Un rendiconto è generato da un gestionale: ha un livello di testo vero, colonne
+in posizioni dichiarate dalla propria intestazione, e voci con un codice
+(`001.005 Assicurazione`) che lo stesso amministratore riusa ogni anno. Su tre
+esercizi consecutivi del nostro condominio — 2022-23, 2023-24, 2024-25 — il
+parser legge 30, 28 e 30 voci senza alcuna chiamata al modello, e 22 codici
+sono presenti in tutti e tre. Dei 30 codici del 2024-2025, due soli non
+comparivano negli anni precedenti.
+
+Il modello serve dunque una volta per formato, per scrivere la corrispondenza
+fra codice e categoria, non una volta per documento. Scartato: continuare a
+mandare l'intero PDF come immagini a ogni analisi — 43 pagine per estrarne 9 di
+spese, con un costo per ogni rilettura e un risultato che può cambiare fra due
+letture dello stesso file.
+
+Il parser si ferma quando non riconosce un formato invece di indovinare: sul
+rendiconto dell'amministratore precedente (MULTIGEST) riconosce zero pagine e
+lo dichiara. È la proprietà che lo distingue da un modello, che un numero lo
+restituisce sempre.
+
 ## Aperte
 
 **Cosa vede un condòmino che non è consigliere**, e come trattiamo i dati
