@@ -79,6 +79,19 @@ export function formatEuro(value: number | null | undefined): string {
   }).format(value ?? 0);
 }
 
+// Con i centesimi. Sui totali arrotondare aiuta a leggere, ma su una riga che
+// l'amministratore confronta con la fattura stampata no: una fattura da 269,50
+// mostrata come "270 €" non si ritrova sul documento, e fa sembrare sbagliata
+// un'estrazione che è giusta.
+export function formatEuroPreciso(value: number | null | undefined): string {
+  return new Intl.NumberFormat("it-IT", {
+    style: "currency",
+    currency: "EUR",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value ?? 0);
+}
+
 // Il costo di un'estrazione, detto in modo leggibile. Non è il prezzo in euro
 // — quello dipende dal modello e dal listino — ma è il dato che lo determina,
 // ed è l'unico che l'applicazione può conoscere con certezza.

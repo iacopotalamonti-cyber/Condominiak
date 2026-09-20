@@ -7,7 +7,8 @@ import { Loader2, RefreshCw } from "lucide-react";
 import { analizzaDocumenti, messaggioErrore } from "@/lib/extraction-client";
 import { Button } from "@/components/ui/button";
 import { formatUso } from "@/lib/calcoli";
-import type { DocumentoArchiviato } from "@/components/dashboard/AggiungiBilancio";
+import { etichettaDocumento } from "@/lib/documenti-client";
+import type { DocumentoArchiviato } from "@/lib/types";
 
 interface EstraiFornitoriProps {
   condominiumId: string;
@@ -37,7 +38,7 @@ export function EstraiFornitori({
     // Una rilettura riscrive l'anno intero. Finché il salvataggio non sa
     // distinguere un importo corretto a mano da uno letto dal modello, l'unica
     // difesa onesta è chiederlo prima invece di farlo scoprire dopo.
-    if (anniConDati.includes(doc.anno)) {
+    if (doc.anno !== null && anniConDati.includes(doc.anno)) {
       const conferma = window.confirm(
         `Il ${doc.anno} ha già dei dati salvati. Rileggerlo li sostituisce, comprese le correzioni fatte a mano. Procedo?`
       );
@@ -60,6 +61,11 @@ export function EstraiFornitori({
       if (!bilancio) throw new Error("Nessun dato letto dal documento");
 
       const anno = bilancio.anno > 1900 ? bilancio.anno : doc.anno;
+      if (!anno) {
+        throw new Error(
+          "L'anno dell'esercizio non è stato riconosciuto: aprilo da Analisi spese e indicalo a mano"
+        );
+      }
       const res = await fetch("/api/save-bilancio", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -87,7 +93,7 @@ export function EstraiFornitori({
       );
       router.refresh();
     } catch (err) {
-      setErrore(`${doc.anno}: ${messaggioErrore(err)}`);
+      setErrore(`${doc.nome}: ${messaggioErrore(err)}`);
     } finally {
       setInCorso(null);
       setStato("");
@@ -109,7 +115,7 @@ export function EstraiFornitori({
             title={doc.nome}
           >
             {inCorso === doc.path ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-            Rileggi {doc.anno}
+            <span className="max-w-64 truncate">{etichettaDocumento(doc)}</span>
           </Button>
         ))}
       </div>

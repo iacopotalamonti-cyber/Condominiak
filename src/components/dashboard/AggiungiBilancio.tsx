@@ -19,7 +19,7 @@ import {
   scriviImporto,
   sommaSpese,
 } from "@/lib/anthropic";
-import { percorsoDocumento } from "@/lib/documenti-client";
+import { etichettaDocumento, percorsoDocumento } from "@/lib/documenti-client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -28,15 +28,12 @@ import { Label } from "@/components/ui/label";
 import { CampoImporto } from "@/components/estrazione/CampoImporto";
 import { ControlliBilancio } from "@/components/estrazione/ControlliBilancio";
 import { formatEuro, formatUso } from "@/lib/calcoli";
-import type { CampoImporto as CampoImportoKey, ExtractedBilancio, UploadedFile } from "@/lib/types";
-
-// Un documento già caricato in passato e ancora in archivio: si rianalizza
-// senza doverlo ricaricare, perché il file ce l'abbiamo già.
-export interface DocumentoArchiviato {
-  anno: number;
-  nome: string;
-  path: string;
-}
+import type {
+  CampoImporto as CampoImportoKey,
+  DocumentoArchiviato,
+  ExtractedBilancio,
+  UploadedFile,
+} from "@/lib/types";
 
 interface AggiungiBilancioProps {
   condominiumId: string;
@@ -244,7 +241,7 @@ export function AggiungiBilancio({
                       title={doc.nome}
                     >
                       <RefreshCw />
-                      Rianalizza {doc.anno}
+                      <span className="max-w-64 truncate">{etichettaDocumento(doc)}</span>
                     </Button>
                   ))}
                 </div>

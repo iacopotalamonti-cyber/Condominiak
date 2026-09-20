@@ -195,9 +195,11 @@ const REGOLE_BILANCI = `Regole sui bilanci:
   approvazione né quella di stampa del documento
 - Un esercizio a cavallo di due anni solari (per esempio 01/07/2024-30/06/2025,
   o un rendiconto intitolato "2024-2025") è UN SOLO esercizio, non due:
-  restituisci una sola voce, con "anno" uguale al PRIMO dei due anni, quello
-  con cui il documento stesso si intitola. Non spezzare lo stesso rendiconto in
-  due bilanci e non ripetere lo stesso totale sotto due anni diversi
+  restituisci una sola voce, con "anno" uguale al SECONDO dei due anni, quello
+  in cui l'esercizio si chiude: il rendiconto "2023-2024" è l'esercizio 2024,
+  il rendiconto "2024-2025" è l'esercizio 2025. Non spezzare lo stesso
+  rendiconto in due bilanci e non ripetere lo stesso totale sotto due anni
+  diversi
 - "prev" è il preventivo, "cons" il consuntivo, "fondo" il fondo di riserva
 - Ogni voce di spesa appartiene all'anno del proprio bilancio: non mescolare
   esercizi diversi nella stessa voce`;
@@ -449,15 +451,35 @@ export function verificaImporto(
 ): EsitoVerifica {
   if (!valore || !pagina || !testoPagine.size) return "non_verificabile";
 
-  const cifre = cifreImporto(valore);
-  if (cifre.length < 3) return "non_verificabile";
-
   const vicine = [pagina, pagina - 1, pagina + 1]
     .map((p) => testoPagine.get(p))
     .filter((testo): testo is string => Boolean(testo && testo.trim()));
 
   if (!vicine.length) return "non_verificabile";
+
+  const cifre = cifreImporto(valore);
+
+  // Poche cifre ("55") ricorrono dentro qualunque altro numero della pagina:
+  // cercarle nel flusso delle sole cifre darebbe un "verificato" preso a caso.
+  // Prima questi importi venivano dichiarati non verificabili, il che metteva
+  // un punto interrogativo accanto a ogni spesa sotto i 100 € — cioè a buona
+  // parte dei piccoli interventi. Si cerca invece la forma con cui i
+  // rendiconti li stampano, centesimi compresi.
+  if (cifre.length < 3) {
+    const stampato = formaStampata(valore);
+    return vicine.some((testo) => stampato.test(testo)) ? "verificata" : "non_trovata";
+  }
+
   return vicine.some((testo) => soleCifre(testo).includes(cifre)) ? "verificata" : "non_trovata";
+}
+
+// "55,00" o "55.00", non preceduto né seguito da altre cifre: esclude il 55
+// dentro 1.550,00 e quello dentro un numero di fattura.
+function formaStampata(valore: number): RegExp {
+  const assoluto = Math.round(Math.abs(valore) * 100);
+  const intero = Math.floor(assoluto / 100);
+  const decimali = String(assoluto % 100).padStart(2, "0");
+  return new RegExp(`(?<![\\d.,])${intero}[.,]${decimali}(?![\\d])`);
 }
 
 // -----------------------------------------------------------------------

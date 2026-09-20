@@ -358,3 +358,14 @@ export interface UploadedFile {
   type: string;
   path: string;
 }
+
+// Un documento già analizzato e rimasto in archivio: si rilegge senza doverlo
+// ricaricare.
+export interface DocumentoArchiviato {
+  // L'esercizio che questo documento ha prodotto, null se nessun bilancio lo
+  // usa. Un documento può restare orfano — per esempio se il suo anno è stato
+  // sovrascritto da un altro rendiconto — e deve restare rileggibile lo stesso.
+  anno: number | null;
+  nome: string;
+  path: string;
+}

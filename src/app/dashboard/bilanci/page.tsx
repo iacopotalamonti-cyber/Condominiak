@@ -6,25 +6,37 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { FonteLink } from "@/components/estrazione/FonteLink";
+import { EliminaEsercizio } from "@/components/dashboard/EliminaEsercizio";
 import { formatEuro, variazioneAnnua } from "@/lib/calcoli";
 import { esercizi } from "@/lib/bilancio";
 import type { Bilancio, FonteSalvata, Spesa } from "@/lib/types";
 
 export default async function BilanciPage() {
-  const { condominium } = await getDashboardContext();
+  const { condominium, role } = await getDashboardContext();
   const supabase = await createClient();
 
-  const [{ data }, { data: datiSpese }] = await Promise.all([
+  const [{ data }, { data: datiSpese }, { data: datiMovimenti }] = await Promise.all([
     supabase
       .from("bilanci")
       .select("*")
       .eq("condominium_id", condominium.id)
       .order("anno", { ascending: false }),
     supabase.from("spese").select("*").eq("condominium_id", condominium.id),
+    // Solo l'anno: serve a dire quante righe porta via una cancellazione, non
+    // a mostrarle.
+    supabase.from("movimenti").select("anno").eq("condominium_id", condominium.id),
   ]);
 
   const bilanci = (data ?? []) as Bilancio[];
   const spese = (datiSpese ?? []) as Spesa[];
+
+  const vociPerAnno = new Map<number, number>();
+  for (const s of spese) vociPerAnno.set(s.anno, (vociPerAnno.get(s.anno) ?? 0) + 1);
+
+  const movimentiPerAnno = new Map<number, number>();
+  for (const m of (datiMovimenti ?? []) as { anno: number }[]) {
+    movimentiPerAnno.set(m.anno, (movimentiPerAnno.get(m.anno) ?? 0) + 1);
+  }
 
   // Stesso calcolo di Analisi spese e della dashboard: il totale di un
   // esercizio è uno solo, da qualunque pagina lo si guardi.
@@ -84,6 +96,11 @@ export default async function BilanciPage() {
                     <TableHead>Fondo riserva</TableHead>
                     <TableHead>Var. consuntivo</TableHead>
                     <TableHead>Quadratura</TableHead>
+                    {role === "admin" && (
+                      <TableHead className="w-10">
+                        <span className="sr-only">Elimina</span>
+                      </TableHead>
+                    )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -147,6 +164,17 @@ export default async function BilanciPage() {
                             </Badge>
                           )}
                         </TableCell>
+                        {role === "admin" && (
+                          <TableCell>
+                            <EliminaEsercizio
+                              condominiumId={condominium.id}
+                              anno={b.anno}
+                              voci={vociPerAnno.get(b.anno) ?? 0}
+                              movimenti={movimentiPerAnno.get(b.anno) ?? 0}
+                              documentoInArchivio={Boolean(b.documento_path)}
+                            />
+                          </TableCell>
+                        )}
                       </TableRow>
                     );
                   })}

@@ -320,3 +320,19 @@ test("un bilancio con un solo importo non viene scambiato per vuoto", () => {
   const controlli = controlliBilancio(bilancio);
   assert.equal(controlli.filter((c) => /nessun importo/.test(c.messaggio)).length, 0);
 });
+
+test("un importo di poche cifre si verifica sulla forma stampata, non sulle cifre nude", () => {
+  const pagine = new Map([[9, "S.G Service Intervento del 01/08/2024 di campionatura acqua 679 08/08/24 55,00"]]);
+
+  // Prima questi importi erano dichiarati «non verificabili», e ogni spesa
+  // sotto i 100 € si portava dietro un punto interrogativo.
+  assert.equal(verificaImporto(55, 9, pagine), "verificata");
+});
+
+test("un importo di poche cifre non si verifica su un numero che lo contiene", () => {
+  // 55 compare dentro 1.550,00 e dentro il numero di fattura 655, ma la spesa
+  // da 55,00 su questa pagina non c'è.
+  const pagine = new Map([[9, "Fattura 655 del 12/03/2024 importo 1.550,00 e 55 euro di acconto"]]);
+
+  assert.equal(verificaImporto(55, 9, pagine), "non_trovata");
+});

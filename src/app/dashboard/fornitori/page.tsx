@@ -7,10 +7,14 @@ import { AnnoSelector } from "@/components/dashboard/AnnoSelector";
 import { FornitoriChart } from "@/components/dashboard/FornitoriChart";
 import { EstraiFornitori } from "@/components/dashboard/EstraiFornitori";
 import { FonteLink } from "@/components/estrazione/FonteLink";
-import type { DocumentoArchiviato } from "@/components/dashboard/AggiungiBilancio";
+import { documentiArchiviati } from "@/lib/documenti-archivio";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CATEGORIE_SPESA_LABEL, formatEuro } from "@/lib/calcoli";
+import {
+  CATEGORIE_SPESA_LABEL,
+  formatEuro,
+  formatEuroPreciso,
+} from "@/lib/calcoli";
 import { SENZA_FORNITORE, perFornitore } from "@/lib/fornitori";
 import type { Fornitore, Movimento } from "@/lib/types";
 
@@ -21,7 +25,7 @@ export default async function FornitoriPage({
 }: {
   searchParams: Promise<{ anno?: string }>;
 }) {
-  const { role, condominium } = await getDashboardContext();
+  const { role, condominium, userId } = await getDashboardContext();
   const supabase = await createClient();
 
   const [{ data }, { data: datiFornitori }] = await Promise.all([
@@ -41,12 +45,10 @@ export default async function FornitoriPage({
     .eq("condominium_id", condominium.id)
     .not("documento_path", "is", null);
 
-  const archiviati: DocumentoArchiviato[] = ((datiBilanci ?? []) as {
-    anno: number;
-    documento_path: string;
-  }[])
-    .map((b) => ({ anno: b.anno, nome: nomeFile(b.documento_path), path: b.documento_path }))
-    .sort((a, b) => b.anno - a.anno);
+  const archiviati = await documentiArchiviati(
+    userId,
+    (datiBilanci ?? []) as { anno: number; documento_path: string | null }[]
+  );
 
   const movimenti = (data ?? []) as Movimento[];
   const anagrafica = (datiFornitori ?? []) as Fornitore[];
@@ -176,7 +178,7 @@ export default async function FornitoriPage({
                             {m.data ? `${formatData(m.data)} — ` : ""}
                             {m.descrizione || CATEGORIE_SPESA_LABEL[m.categoria] || m.categoria}
                           </span>
-                          <span className="tabular-nums">{formatEuro(Number(m.importo))}</span>
+                          <span className="tabular-nums">{formatEuroPreciso(Number(m.importo))}</span>
                         </div>
                         <FonteLink
                           pagina={m.fonte_pagina}
@@ -228,9 +230,3 @@ function formatData(data: string): string {
 
 // I file in storage sono "<prefisso>/<utente>/<uuid>-<nome vero>": il prefisso
 // è un UUID e contiene trattini, quindi va tolto per intero.
-const PREFISSO_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-/i;
-
-function nomeFile(path: string): string {
-  const base = path.split("/").pop() ?? path;
-  return base.replace(PREFISSO_UUID, "");
-}
