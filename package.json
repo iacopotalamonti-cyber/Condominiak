@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "node --test --experimental-strip-types \"src/lib/__tests__/*.test.ts\"",
-    "pulisci-storage": "node --env-file=.env.local scripts/pulisci-storage.mjs"
+    "pulisci-storage": "node --env-file=.env.local scripts/pulisci-storage.mjs",
+    "leggi-rendiconto": "node --experimental-strip-types scripts/leggi-rendiconto.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",
