@@ -17,6 +17,7 @@ import {
   type Pagina,
   type Riga,
 } from "../src/lib/rendiconto.ts";
+import { classifica, PROFILO_ENRIQUES_3 } from "../src/lib/profilo.ts";
 
 // Frammenti sulla stessa riga hanno la stessa y a meno di un'inezia: i caratteri
 // di una riga non sono allineati al punto.
@@ -87,3 +88,20 @@ console.log(`spese personali (a contatore)    ${eur(q.personali).padStart(12)}`)
 console.log(`ricostruito                      ${eur(q.ricostruito).padStart(12)}`);
 console.log(`Totale Gen. stampato             ${eur(totali.generale).padStart(12)}`);
 console.log(`scarto                           ${q.scarto === null ? "—" : eur(q.scarto).padStart(12)}`);
+
+const c = classifica(voci, totali, PROFILO_ENRIQUES_3);
+
+console.log("\n--- categorie ---");
+for (const [categoria, importo] of Object.entries(c.spese).sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))) {
+  console.log(`${categoria.padEnd(16)} ${eur(importo ?? 0).padStart(12)}`);
+}
+console.log(`${"TOTALE SPESE".padEnd(16)} ${eur(c.totaleSpese).padStart(12)}   (Totale Gen. ${eur(totali.generale)})`);
+
+if (c.rimborsi.length) {
+  console.log("\n--- incassi, fuori dalle spese ---");
+  for (const r of c.rimborsi) console.log(`${r.codice}  ${eur(r.importo).padStart(12)}  ${r.descrizione.slice(0, 40)}`);
+}
+if (c.nonMappate.length) {
+  console.log("\n--- codici che il profilo non conosce ---");
+  for (const n of c.nonMappate) console.log(`${n.codice}  ${eur(n.importo).padStart(12)}  ${n.descrizione.slice(0, 40)}`);
+}
