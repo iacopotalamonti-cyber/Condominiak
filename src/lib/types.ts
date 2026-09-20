@@ -70,6 +70,11 @@ export type CategoriaSpesa =
   | "manutenzione"
   | "acqua"
   | "giardinaggio"
+  // Un impianto del condominio con costi ricorrenti suoi — assistenza, accisa,
+  // oneri fiscali, manutenzioni straordinarie. Senza una categoria propria
+  // finisce in "varie" insieme a cose che non c'entrano, e i 5.378,85 € di
+  // manutenzione straordinaria del 2023-2024 diventano invisibili.
+  | "fotovoltaico"
   | "varie";
 
 export interface Spesa {
@@ -223,6 +228,7 @@ export interface ExtractedSpese {
   manutenzione: number;
   acqua: number;
   giardinaggio: number;
+  fotovoltaico: number;
   varie: number;
 }
 

@@ -65,6 +65,7 @@ const CATEGORIE_SPESA = [
   "manutenzione",
   "acqua",
   "giardinaggio",
+  "fotovoltaico",
   "varie",
 ] as const;
 
@@ -549,6 +550,7 @@ function mapSpese(valore: (categoria: (typeof CATEGORIE_SPESA)[number]) => numbe
     manutenzione: valore("manutenzione"),
     acqua: valore("acqua"),
     giardinaggio: valore("giardinaggio"),
+    fotovoltaico: valore("fotovoltaico"),
     varie: valore("varie"),
   };
 }

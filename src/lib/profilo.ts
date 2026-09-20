@@ -11,19 +11,12 @@
 // impianto" da solo non dice quale impianto — la riga sotto dice "ascensore".
 
 import type { Lettura, VoceLetta } from "./motore.ts";
+import type { CategoriaSpesa } from "./types.ts";
 
-export type Categoria =
-  | "riscaldamento"
-  | "ascensore"
-  | "pulizia"
-  | "assicurazione"
-  | "amm"
-  | "illuminazione"
-  | "manutenzione"
-  | "acqua"
-  | "giardinaggio"
-  | "fotovoltaico"
-  | "varie";
+// Le categorie sono quelle dell'applicazione, non un secondo elenco parallelo:
+// una categoria che esiste qui e non lì produrrebbe righe che l'app salva e
+// non sa più mostrare.
+export type Categoria = CategoriaSpesa;
 
 /**
  * Un incasso non è una spesa col segno meno.
