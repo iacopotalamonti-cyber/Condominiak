@@ -72,6 +72,19 @@ export interface ProfiloFormato {
 // Il risultato
 // ---------------------------------------------------------------------------
 
+/**
+ * Una riga di spesa vera: la fattura, il consumo, il conguaglio.
+ *
+ * Sta nella colonna più a sinistra, quella dell'importo del movimento, ed è
+ * l'unico posto dove compare il nome di chi ha emesso la spesa. Senza queste
+ * righe si sa quanto è costato l'ascensore, non a chi è stato pagato.
+ */
+export interface MovimentoLetto {
+  descrizione: string;
+  importo: number;
+  pagina: number;
+}
+
 export interface VoceLetta {
   chiave: string;
   descrizione: string;
@@ -79,6 +92,12 @@ export interface VoceLetta {
   /** Quota separata, quando il formato distingue proprietario e conduttore. */
   importoSecondario: number | null;
   pagina: number;
+  /**
+   * I movimenti della voce, quando sommano al totale della voce stessa. Se non
+   * ci arrivano vengono scartati: una lista incompleta di fatture è peggio di
+   * nessuna lista, perché sembra completa.
+   */
+  movimenti: MovimentoLetto[];
 }
 
 export interface Lettura {
@@ -90,11 +109,20 @@ export interface Lettura {
   scarto: number | null;
 }
 
+/** La colonna più a sinistra: l'importo del singolo movimento. */
+const COLONNA_MOVIMENTO = 0;
+
+// Quanto può discostare la somma dei movimenti dal totale della voce prima che
+// la si consideri incompleta. Un centesimo, cioè l'arrotondamento e nulla più:
+// questo confronto è l'unica prova che non ci siamo persi una fattura.
+const TOLLERANZA_MOVIMENTI = 0.01;
+
 function arrotonda(valore: number): number {
   return Math.round(valore * 100) / 100;
 }
 
-function testoRiga(riga: Riga): string {
+/** I frammenti di una riga, da sinistra a destra, come testo unico. */
+export function testoRiga(riga: Riga): string {
   return riga.frammenti
     .slice()
     .sort((a, b) => a.x - b.x)
@@ -212,6 +240,7 @@ export function leggi(pagine: Pagina[], profilo: ProfiloFormato): Lettura {
               importo: 0,
               importoSecondario: null,
               pagina: pagina.numero,
+              movimenti: [],
             };
             voci.push(corrente);
           }
@@ -228,6 +257,7 @@ export function leggi(pagine: Pagina[], profilo: ProfiloFormato): Lettura {
             importo: 0,
             importoSecondario: null,
             pagina: pagina.numero,
+            movimenti: [],
           };
         }
         continue;
@@ -244,6 +274,9 @@ export function leggi(pagine: Pagina[], profilo: ProfiloFormato): Lettura {
               importo,
               importoSecondario: null,
               pagina: pagina.numero,
+              // Questo formato dichiara solo il totale del conto: le righe che
+              // lo compongono stanno altrove, e non le leggiamo.
+              movimenti: [],
             });
           }
         }
@@ -270,6 +303,17 @@ export function leggi(pagine: Pagina[], profilo: ProfiloFormato): Lettura {
         } else if (indice === profilo.colonnaTotaleSecondaria && corrente.importoSecondario === null) {
           corrente.importoSecondario = valore;
           if (!voci.includes(corrente)) voci.push(corrente);
+        } else if (indice === COLONNA_MOVIMENTO) {
+          corrente.movimenti.push({
+            descrizione: ordinati
+              .filter((f) => f.x < frammento.x && importoDi(f.testo) === null)
+              .map((f) => f.testo.trim())
+              .filter(Boolean)
+              .join(" ")
+              .trim(),
+            importo: valore,
+            pagina: pagina.numero,
+          });
         }
       }
     }
@@ -278,11 +322,24 @@ export function leggi(pagine: Pagina[], profilo: ProfiloFormato): Lettura {
   const segno = profilo.segno ?? 1;
   const lette = voci
     .filter((v) => v.importo !== 0 || v.importoSecondario !== null)
-    .map((v) => ({
-      ...v,
-      importo: arrotonda(v.importo * segno),
-      importoSecondario: v.importoSecondario === null ? null : arrotonda(v.importoSecondario * segno),
-    }));
+    .map((v) => {
+      // I movimenti si tengono solo se sommano al totale della voce. Una riga
+      // può essere sfuggita — un importo finito in un'altra colonna, una
+      // tabella spezzata — e un elenco di fatture a cui ne manca una si legge
+      // come se fosse completo.
+      const totale = arrotonda(v.importo + (v.importoSecondario ?? 0));
+      const somma = arrotonda(v.movimenti.reduce((tot, m) => tot + m.importo, 0));
+      const completi = Math.abs(somma - totale) <= TOLLERANZA_MOVIMENTI;
+
+      return {
+        ...v,
+        importo: arrotonda(v.importo * segno),
+        importoSecondario: v.importoSecondario === null ? null : arrotonda(v.importoSecondario * segno),
+        movimenti: completi
+          ? v.movimenti.map((m) => ({ ...m, importo: arrotonda(m.importo * segno) }))
+          : [],
+      };
+    });
   for (const p of personali) p.importo = arrotonda(p.importo * segno);
   if (totaleGenerale !== null) totaleGenerale = arrotonda(totaleGenerale * segno);
   const somma = arrotonda(

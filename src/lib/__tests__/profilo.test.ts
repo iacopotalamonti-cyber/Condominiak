@@ -18,6 +18,7 @@ function voce(chiave: string, importo: number, secondario = false): VoceLetta {
     importo: secondario ? 0 : importo,
     importoSecondario: secondario ? importo : null,
     pagina: 1,
+    movimenti: [],
   };
 }
 
