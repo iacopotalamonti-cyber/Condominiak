@@ -8,6 +8,7 @@ import { FonteLink } from "@/components/estrazione/FonteLink";
 import { CATEGORIE_SPESA_LABEL, formatEuro } from "@/lib/calcoli";
 import { ORIGINE_TOTALE_LABEL, esercizi } from "@/lib/bilancio";
 import { documentiArchiviati } from "@/lib/documenti-archivio";
+import { incassiDi } from "@/lib/incassi";
 import type { Bilancio, Spesa } from "@/lib/types";
 
 export default async function SpesePage({
@@ -33,10 +34,11 @@ export default async function SpesePage({
 
   const spese = (data ?? []) as Spesa[];
   const bilanci = (datiBilanci ?? []) as Bilancio[];
+  const incassi = await incassiDi(supabase, condominium.id);
 
   // Un solo calcolo del totale per tutte le pagine: qui si sceglie solo quale
   // esercizio mostrare.
-  const tuttiEsercizi = esercizi(bilanci, spese);
+  const tuttiEsercizi = esercizi(bilanci, spese, incassi);
   const anni = tuttiEsercizi.map((e) => e.anno);
 
   // I documenti caricati in passato restano in archivio: rileggerli non
@@ -52,7 +54,9 @@ export default async function SpesePage({
       : anni[0];
 
   const speseAnno = spese.filter((s) => s.anno === annoSelezionato);
+  const incassiAnno = incassi.filter((i) => i.anno === annoSelezionato);
   const esercizio = tuttiEsercizi.find((e) => e.anno === annoSelezionato);
+  const totaleDocumento = bilanci.find((b) => b.anno === annoSelezionato)?.totale_documento ?? null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -133,6 +137,43 @@ export default async function SpesePage({
             <p className="text-xs text-muted-foreground">
               Totale dell&apos;esercizio preso dal {ORIGINE_TOTALE_LABEL[esercizio.origine]}.
             </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {incassiAnno.length > 0 && (
+        <Card>
+          <CardHeader className="flex-row items-center justify-between">
+            <CardTitle className="text-base">Incassi e partite personali</CardTitle>
+            <span className="text-sm font-medium text-muted-foreground tabular-nums">
+              {formatEuro(incassiAnno.reduce((somma, i) => somma + i.importo, 0))}
+            </span>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <p className="text-sm text-muted-foreground">
+              Righe che il rendiconto tiene dentro il proprio totale
+              {totaleDocumento ? ` (${formatEuro(totaleDocumento)})` : ""} ma che non sono spesa
+              comune: un rimborso incassato dal condominio, o una spesa riaddebitata a chi
+              l&apos;ha causata. È questa la differenza fra il totale stampato sul documento e i{" "}
+              {formatEuro(esercizio?.totale ?? 0)} di spese qui sopra.
+            </p>
+            <div className="flex flex-col gap-3 border-t pt-4">
+              {incassiAnno.map((incasso) => (
+                <div key={incasso.id} className="flex flex-col gap-0.5">
+                  <div className="flex items-center justify-between gap-4 text-sm">
+                    <span className="text-muted-foreground">{incasso.descrizione}</span>
+                    <span className="font-medium tabular-nums">{formatEuro(incasso.importo)}</span>
+                  </div>
+                  <FonteLink
+                    pagina={incasso.fonte_pagina}
+                    testo={incasso.fonte_testo ?? incasso.note}
+                    verificata={incasso.fonte_verificata}
+                    verificabile={incasso.fonte_verificabile}
+                    percorso={incasso.documento_path}
+                  />
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
       )}

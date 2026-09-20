@@ -2,6 +2,7 @@ import Link from "next/link";
 import { CalendarCheck, FileText, Home, Percent, Wallet } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
+import { incassiDi } from "@/lib/incassi";
 import { getDashboardContext } from "@/lib/dashboard-context";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { UnitSelector } from "@/components/dashboard/UnitSelector";
@@ -87,7 +88,8 @@ export default async function AppartamentoPage({
   const esercizio = esercizioCorrente(
     (bilanciData ?? []) as Bilancio[],
     spese,
-    annoCorrente
+    annoCorrente,
+    await incassiDi(supabase, condominium.id)
   );
   const speseAnnoCorrente = spese.filter((s) => s.anno === esercizio?.anno);
 

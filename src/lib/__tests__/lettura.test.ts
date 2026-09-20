@@ -127,7 +127,16 @@ test("le partite di un singolo condomino non entrano nelle spese comuni", () => 
   assert.equal(letto.motivo, null);
   assert.equal(letto.classificazione.totaleSpese, 100);
   assert.equal(letto.classificazione.totaleRimborsi, 20);
-  assert.equal(estrazioneDa(letto, "prova.pdf").totale, 100);
+  // Il totale resta quello stampato sul documento, perché è la cifra che il
+  // condomino ritrova sulla carta; il consuntivo è quanto è stato speso
+  // davvero, e la partita personale è registrata a parte.
+  const estratto = estrazioneDa(letto, "prova.pdf");
+  assert.equal(estratto.totale, 120);
+  assert.equal(estratto.cons, 100);
+  assert.deepEqual(
+    estratto.incassi.map((i) => [i.codice, i.importo]),
+    [["12", 20]]
+  );
   // E la differenza col totale stampato viene detta, non nascosta.
   assert.match(notaDiLettura(letto), /120,00 perché comprende anche partite di singoli condomini/);
 });

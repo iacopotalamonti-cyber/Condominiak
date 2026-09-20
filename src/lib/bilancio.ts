@@ -1,4 +1,4 @@
-import type { Bilancio, Spesa } from "./types";
+import type { Bilancio, Incasso, Spesa } from "./types";
 
 // Scostamento oltre il quale la somma delle voci e il totale del documento non
 // si considerano più la stessa cifra (arrotondamenti dell'amministratore).
@@ -16,6 +16,10 @@ export interface TotaleEsercizio {
   origine: OrigineTotale;
   // Somma delle voci di spesa classificate per categoria.
   sommaVoci: number;
+  // Somma con segno delle partite di singoli condomini comprese nel totale
+  // stampato: negativa quando il documento le sottrae (un rimborso incassato),
+  // positiva quando ve le somma (una spesa riaddebitata).
+  incassi: number;
   // Quanto del totale non è ricondotto a nessuna categoria. È la parte che
   // l'estrazione non ha classificato: va mostrata, non nascosta, altrimenti il
   // dettaglio non somma al totale e i numeri sembrano sbagliati.
@@ -32,11 +36,19 @@ export interface TotaleEsercizio {
 export function totaleEsercizio(
   anno: number,
   bilancio: Pick<Bilancio, "totale_documento" | "consuntivo"> | undefined | null,
-  spese: Pick<Spesa, "importo">[]
+  spese: Pick<Spesa, "importo">[],
+  // Le partite di singoli condomini comprese nel totale stampato. Senza di
+  // loro un rimborso assicurativo di 2.500 € si presentava come 2.500 € di
+  // spese contate due volte.
+  incassi: Pick<Incasso, "importo">[] = []
 ): TotaleEsercizio {
   const sommaVoci = arrotonda(spese.reduce((somma, s) => somma + (s.importo || 0), 0));
+  const sommaIncassi = arrotonda(incassi.reduce((somma, i) => somma + (i.importo || 0), 0));
 
-  const daDocumento = positivo(bilancio?.totale_documento);
+  // Il totale stampato sul documento comprende gli incassi: quanto è stato
+  // speso è quel totale meno loro. È l'unico posto in cui questa sottrazione
+  // va fatta, e per questo sta qui e non nelle pagine.
+  const daDocumento = positivo(arrotonda(positivo(bilancio?.totale_documento) - sommaIncassi));
   const daConsuntivo = positivo(bilancio?.consuntivo);
 
   let totale = 0;
@@ -63,6 +75,7 @@ export function totaleEsercizio(
     totale: arrotonda(totale),
     origine,
     sommaVoci,
+    incassi: sommaIncassi,
     nonClassificato: differenza > TOLLERANZA_QUADRATURA ? differenza : 0,
     eccedenza: differenza < -TOLLERANZA_QUADRATURA ? -differenza : 0,
     quadra: Math.abs(differenza) <= TOLLERANZA_QUADRATURA,
@@ -72,7 +85,11 @@ export function totaleEsercizio(
 // Tutti gli esercizi per cui esistono dati, dal più recente. Gli anni vengono
 // da entrambe le tabelle: un anno con sole voci di spesa e nessun bilancio
 // registrato è comunque un esercizio da mostrare.
-export function esercizi(bilanci: Bilancio[], spese: Spesa[]): TotaleEsercizio[] {
+export function esercizi(
+  bilanci: Bilancio[],
+  spese: Spesa[],
+  incassi: Incasso[] = []
+): TotaleEsercizio[] {
   const anni = new Set<number>();
   for (const b of bilanci) if (b.anno) anni.add(b.anno);
   for (const s of spese) if (s.anno) anni.add(s.anno);
@@ -83,7 +100,8 @@ export function esercizi(bilanci: Bilancio[], spese: Spesa[]): TotaleEsercizio[]
       totaleEsercizio(
         anno,
         bilanci.find((b) => b.anno === anno),
-        spese.filter((s) => s.anno === anno)
+        spese.filter((s) => s.anno === anno),
+        incassi.filter((i) => i.anno === anno)
       )
     );
 }
@@ -94,9 +112,10 @@ export function esercizi(bilanci: Bilancio[], spese: Spesa[]): TotaleEsercizio[]
 export function esercizioCorrente(
   bilanci: Bilancio[],
   spese: Spesa[],
-  anno = new Date().getFullYear()
+  anno = new Date().getFullYear(),
+  incassi: Incasso[] = []
 ): TotaleEsercizio | null {
-  const tutti = esercizi(bilanci, spese);
+  const tutti = esercizi(bilanci, spese, incassi);
   return tutti.find((e) => e.anno === anno) ?? tutti[0] ?? null;
 }
 

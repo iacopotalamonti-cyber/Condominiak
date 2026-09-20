@@ -1,6 +1,7 @@
 import { AlertTriangle, Building2, TrendingUp, Users, Wallet } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
+import { incassiDi } from "@/lib/incassi";
 import { getDashboardContext } from "@/lib/dashboard-context";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { AlertBar, type AlertItem } from "@/components/dashboard/AlertBar";
@@ -39,7 +40,8 @@ export default async function DashboardPage() {
   const esercizio = esercizioCorrente(
     (bilanci ?? []) as Bilancio[],
     (spese ?? []) as Spesa[],
-    annoCorrente
+    annoCorrente,
+    await incassiDi(supabase, condominium.id)
   );
 
   const morosita = calcolaMorosita(pagamentiList);

@@ -629,6 +629,9 @@ export function bilancioVuoto(anno = 0): ExtractedBilancio {
     fondo: 0,
     spese: mapSpese(() => 0),
     movimenti: [],
+    // Il modello non le distingue dalle spese: le riconosce solo il motore di
+    // lettura, che sa quale voce del rendiconto è una partita personale.
+    incassi: [],
     totale: 0,
     fonti: {},
     conflitti: {},
@@ -1090,6 +1093,15 @@ export function sommaSpese(spese: ExtractedSpese): number {
 // I controlli che il modello non può fare su se stesso: sono aritmetica e
 // confronti fra documenti, e girano sul risultato finale invece che dentro la
 // richiesta. Sono la rete che prende gli errori di lettura rimasti.
+/** La somma con segno delle partite di singoli condomini dentro il totale. */
+export function sommaIncassi(bilancio: Pick<ExtractedBilancio, "incassi">): number {
+  return arrotondaImporto((bilancio.incassi ?? []).reduce((tot, i) => tot + (i.importo || 0), 0));
+}
+
+function arrotondaImporto(valore: number): number {
+  return Math.round(valore * 100) / 100;
+}
+
 export function controlliBilancio(bilancio: ExtractedBilancio): Controllo[] {
   const controlli: Controllo[] = [];
   const annoMax = new Date().getFullYear() + 1;
@@ -1127,13 +1139,19 @@ export function controlliBilancio(bilancio: ExtractedBilancio): Controllo[] {
     return controlli;
   }
 
-  if (somma && bilancio.totale && Math.abs(somma - bilancio.totale) > TOLLERANZA_QUADRATURA) {
+  // Il totale stampato comprende anche le partite di singoli condomini: la
+  // quadratura è fra le voci e il totale al netto di quelle, non fra le voci e
+  // il totale. Senza questo, un rimborso assicurativo di 2.500 € si presentava
+  // come un errore di lettura da 2.500 €.
+  const atteso = arrotondaImporto(bilancio.totale - sommaIncassi(bilancio));
+
+  if (somma && bilancio.totale && Math.abs(somma - atteso) > TOLLERANZA_QUADRATURA) {
     controlli.push({
       campo: "totale",
       livello: "errore",
       messaggio:
-        `Le voci di spesa sommano ${eur(somma)}, ma il totale stampato nel documento è ` +
-        `${eur(bilancio.totale)}: mancano ${eur(Math.abs(somma - bilancio.totale))}.`,
+        `Le voci di spesa sommano ${eur(somma)}, ma dal totale stampato nel documento ` +
+        `ci si aspetta ${eur(atteso)}: mancano ${eur(Math.abs(somma - atteso))}.`,
     });
   } else if (
     somma &&

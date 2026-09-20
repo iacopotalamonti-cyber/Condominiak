@@ -213,3 +213,52 @@ test("le quote di tutte le unità sommano alla spesa dell'esercizio", () => {
   const somma = unita.reduce((t, u) => t + quotaAnnua(u.millesimi, spesa, totale), 0);
   assert.ok(Math.abs(somma - spesa) <= unita.length, `le quote sommano ${somma} invece di ${spesa}`);
 });
+
+// ---------------------------------------------------------------------------
+// Gli incassi dentro il totale stampato
+// ---------------------------------------------------------------------------
+
+test("un rimborso incassato non è spesa contata due volte", () => {
+  // È il 2023-2024 di Via Enriques 3: il documento stampa 28.293,26 perché ne
+  // sottrae 2.500 di rimborso assicurativo, ma il condominio ha speso
+  // 30.793,26. Senza la riga dell'incasso l'applicazione avvisava che 2.500 €
+  // erano contati due volte.
+  const bilancio = { totale_documento: 28293.26, consuntivo: 30793.26 };
+  const spese = [{ importo: 30793.26 }];
+
+  const senza = totaleEsercizio(2024, bilancio, spese);
+  assert.equal(senza.eccedenza, 2500);
+
+  const con = totaleEsercizio(2024, bilancio, spese, [{ importo: -2500 }]);
+  assert.equal(con.totale, 30793.26);
+  assert.equal(con.origine, "documento");
+  assert.equal(con.eccedenza, 0);
+  assert.equal(con.nonClassificato, 0);
+  assert.equal(con.quadra, true);
+  assert.equal(con.incassi, -2500);
+});
+
+test("una spesa riaddebitata a un singolo abbassa la spesa comune", () => {
+  // Il caso opposto: il documento somma la partita al proprio totale, quindi
+  // le spese comuni sono meno di quanto stampato.
+  const esercizio = totaleEsercizio(
+    2022,
+    { totale_documento: 32244.88, consuntivo: 32146.88 },
+    [{ importo: 32146.88 }],
+    [{ importo: 98 }]
+  );
+
+  assert.equal(esercizio.totale, 32146.88);
+  assert.equal(esercizio.quadra, true);
+});
+
+test("senza incassi i totali restano quelli di prima", () => {
+  // La tabella arriva con una migrazione: finché non c'è, le pagine leggono
+  // una lista vuota e devono comportarsi esattamente come facevano.
+  const bilancio = { totale_documento: 30915.88, consuntivo: 30915.88 };
+  const spese = [{ importo: 30915.88 }];
+  assert.deepEqual(
+    totaleEsercizio(2023, bilancio, spese, []),
+    totaleEsercizio(2023, bilancio, spese)
+  );
+});

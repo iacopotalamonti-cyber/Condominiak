@@ -242,7 +242,10 @@ export function estrazioneDa(letto: RendicontoLetto, documento: string): Extract
     );
   }
 
-  const totale = classificazione.totaleSpese;
+  // Il totale del documento resta quello stampato: è la cifra che il condomino
+  // ritrova sulla carta. Quanto è stato speso davvero si ricava togliendogli
+  // gli incassi, e l'applicazione lo fa in un posto solo.
+  const totale = lettura.totaleGenerale ?? classificazione.totaleSpese;
   if (lettura.totaleGenerale !== null) {
     fonti.totale = fonteDi(
       documento,
@@ -258,11 +261,17 @@ export function estrazioneDa(letto: RendicontoLetto, documento: string): Extract
     // chiuso né il fondo di riserva in una forma che si possa leggere qui:
     // restano vuoti invece di essere riempiti con un numero plausibile.
     prev: 0,
-    cons: totale,
+    cons: classificazione.totaleSpese,
     fondo: 0,
     spese,
     movimenti: movimentiDa(letto, documento),
     totale,
+    incassi: classificazione.rimborsi.map((riga) => ({
+      descrizione: riga.descrizione,
+      importo: riga.importo,
+      codice: riga.codice,
+      fonte: fonteDi(documento, 0, `${riga.codice} ${euro(riga.importo)}`),
+    })),
     fonti,
     conflitti: {},
   };

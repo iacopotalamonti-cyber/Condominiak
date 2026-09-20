@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { incassiDi } from "@/lib/incassi";
 import { getDashboardContext } from "@/lib/dashboard-context";
 import { BilancioChart } from "@/components/dashboard/BilancioChart";
 import { FondoRiservaChart } from "@/components/dashboard/FondoRiservaChart";
@@ -40,7 +41,9 @@ export default async function BilanciPage() {
 
   // Stesso calcolo di Analisi spese e della dashboard: il totale di un
   // esercizio è uno solo, da qualunque pagina lo si guardi.
-  const perAnno = new Map(esercizi(bilanci, spese).map((e) => [e.anno, e]));
+  const perAnno = new Map(
+    esercizi(bilanci, spese, await incassiDi(supabase, condominium.id)).map((e) => [e.anno, e])
+  );
 
   function fonteDi(bilancio: Bilancio, campo: string): FonteSalvata | null {
     return bilancio.fonti?.[campo] ?? null;
