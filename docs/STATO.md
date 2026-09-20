@@ -1,4 +1,4 @@
-# Stato del progetto — aggiornato al 19/09/2026
+# Stato del progetto — aggiornato al 20/09/2026
 
 Mappa di quello che esiste **davvero nel codice** oggi. Serve a non rispiegare
 il progetto da capo a ogni sessione, e a distinguere ciò che è fatto da ciò che
@@ -30,12 +30,14 @@ tutto il codice (19/09/2026); non esistono più riferimenti a CondoTwin.
 | Registrazione / login | `src/app/login/`, `src/middleware.ts` | funzionante |
 | Invito condomino via token | `src/app/invite/[token]/`, `src/app/api/invite-resident/` | funzionante |
 | Wizard di onboarding condominio | `src/app/onboarding/`, `src/components/onboarding/` | funzionante |
-| Estrazione AI da documenti | `netlify/functions/extract-background.mts`, `src/app/api/extract-status/` | funzionante, asincrona |
+| Lettura diretta dei rendiconti conosciuti | `src/lib/lettura.ts`, `src/lib/motore.ts`, `src/lib/profili.ts`, `src/lib/profilo.ts` | funzionante, tre formati, costo zero |
+| Estrazione AI da documenti | `netlify/functions/extract-background.mts`, `src/app/api/extract-status/` | funzionante, asincrona — usata solo quando la lettura diretta non basta |
 | Provenienza degli importi (documento/pagina/riga) | `fonti` su `bilanci`, `fonte_*` su `spese`/`movimenti` | funzionante |
 | Quadratura bilancio + conflitti | `src/lib/bilancio.ts`, `src/lib/riconciliazione.ts` | funzionante, con test |
 | Dashboard amministratore | `src/app/dashboard/page.tsx` | funzionante |
 | Bilanci (storico, quadratura, rianalisi) | `src/app/dashboard/bilanci/` | funzionante |
 | Analisi spese per categoria | `src/app/dashboard/spese/` | funzionante |
+| Incassi e partite personali | `src/app/dashboard/spese/`, `src/lib/incassi.ts` | funzionante |
 | Anagrafica fornitori + movimenti | `src/app/dashboard/fornitori/`, `src/lib/fornitori.ts` | funzionante |
 | Archivio documenti | `src/app/dashboard/documenti/` | funzionante |
 | Impianti (anagrafica + scadenze) | `src/app/dashboard/impianti/` | funzionante |
@@ -44,7 +46,7 @@ tutto il codice (19/09/2026); non esistono più riferimenti a CondoTwin.
 
 ## Modello dati (tabelle Supabase)
 
-`condominiums`, `unita`, `bilanci`, `spese`, `movimenti`, `fornitori`,
+`condominiums`, `unita`, `bilanci`, `spese`, `incassi`, `movimenti`, `fornitori`,
 `impianti`, `pagamenti`, `documenti`. Definizioni TypeScript in `src/lib/types.ts`.
 
 Migrazioni applicate, in ordine (`supabase/migrations/`):
@@ -53,6 +55,11 @@ Migrazioni applicate, in ordine (`supabase/migrations/`):
 2. `20260916000000_verifica_non_possibile.sql`
 3. `20260916100000_movimenti.sql`
 4. `20260916110000_anagrafica_fornitori.sql`
+5. `20260920120000_spese_lette_dai_documenti.sql` — sostituisce i numeri estratti
+   dal modello con quelli letti dai documenti, sei esercizi dal 2020 al 2025
+6. `consuntivo_e_totale_documento_separati` (applicata il 20/09/2026)
+7. `20260920130000_incassi.sql` — la tabella delle partite di singoli condomini
+8. `20260920140000_incassi_dei_sei_esercizi.sql` — le quattro righe dei sei anni
 
 Lo schema completo è in `supabase/migrations/00000000000000_schema_iniziale.sql`,
 ricostruito dal database di produzione il 19/09/2026: tabelle, indici, policy RLS
@@ -84,10 +91,9 @@ sono affatto:
   deploy non puntano al progetto di staging, continuano a scrivere sul database
   di produzione.
 - **Sentry è collegato ma spento finché manca il DSN su Netlify.**
-- **Il primo backup non è ancora girato**: il workflow esiste
-  (`.github/workflows/backup.yml`) ma resta fermo finché nel repository non c'è
-  il segreto `SUPABASE_DB_URL`. Fino ad allora il database, che contiene dati
-  reali, non ha alcuna copia.
+- **Il backup non è ancora stato provato con un ripristino.** Dal 20/09/2026 il
+  database ha una copia giornaliera (`.github/workflows/backup.yml`), ma finché
+  non se ne ripristina una su staging non sappiamo se sia utilizzabile.
 - **L'invito ai condòmini non collega nessuno** (verificato): la policy
   `resident_access` su `unita` impedisce a un invitato di rivendicare la propria
   unità, e l'update client-side fallisce in silenzio. Vedi `SERVIZI.md` → "Come
@@ -100,6 +106,22 @@ sono affatto:
 
 ## Test presenti
 
-`npm test` — quattro file in `src/lib/__tests__/`: `anthropic`, `bilancio`,
-`movimenti`, `riconciliazione`. Coprono il calcolo e il parsing, non le pagine,
-non le API, non i flussi end-to-end.
+`npm test` — otto file in `src/lib/__tests__/`: `anthropic`, `bilancio`,
+`lettura`, `motore`, `movimenti`, `profilo`, `rendiconto`, `riconciliazione`.
+Novanta test che coprono il calcolo, il parsing e la lettura dei rendiconti;
+non le pagine, non le API, non i flussi end-to-end.
+
+## Lettura dei rendiconti
+
+Tre formati riconosciuti — Studio Tosiani, Studio Contavalli, MULTIGEST —
+descritti come dati in `src/lib/profili.ts` ed eseguiti da un motore solo
+(`src/lib/motore.ts`). Un rendiconto riconosciuto non viene mandato al modello:
+la lettura costa zero e si verifica da sola contro il totale che il documento
+stampa. Se non quadra al centesimo, se incontra un codice senza categoria o se
+non si capisce l'anno, si dichiara inutilizzabile e il documento va al modello
+come prima.
+
+Verificata sui sei rendiconti di Via Enriques 3, dal 2019-2020 al 2024-2025:
+sei letture utilizzabili, scarto 0,00 su tutte.
+
+Da riga di comando: `npm run leggi-bilancio -- percorso/del/rendiconto.pdf`.

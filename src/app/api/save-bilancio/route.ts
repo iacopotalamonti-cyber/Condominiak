@@ -6,7 +6,7 @@ import { CAMPI_IMPORTO } from "@/lib/anthropic";
 import { righeMovimenti } from "@/lib/movimenti";
 import { chiaveFornitore } from "@/lib/fornitori";
 import { risolviFornitori } from "@/lib/fornitori-server";
-import type { ExtractedMovimento, FonteSalvata } from "@/lib/types";
+import type { ExtractedMovimento, IncassoEstratto, FonteSalvata } from "@/lib/types";
 
 interface SaveBilancioBody {
   condominiumId: string;
@@ -20,6 +20,8 @@ interface SaveBilancioBody {
   // "spesa.riscaldamento", ...
   fonti: Record<string, unknown>;
   movimenti: ExtractedMovimento[];
+  // Le partite di singoli condomini comprese nel totale del documento.
+  incassi: IncassoEstratto[];
   documentoPath: string | null;
 }
 
@@ -125,6 +127,31 @@ export async function POST(req: NextRequest) {
       })
       .filter((riga) => riga.importo > 0);
 
+    // Gli incassi arrivano dal client come tutto il resto: si tiene solo ciò
+    // che ha la forma giusta, e l'importo conserva il segno perché è quello a
+    // dire se il documento somma o sottrae la partita.
+    const righeIncassi = (Array.isArray(body.incassi) ? body.incassi : [])
+      .map((incasso) => {
+        const valore = Number(incasso?.importo);
+        return {
+          condominium_id: condominiumId,
+          anno,
+          descrizione:
+            typeof incasso?.descrizione === "string" && incasso.descrizione.trim()
+              ? incasso.descrizione.trim().slice(0, 300)
+              : "Partita non descritta",
+          importo: Number.isFinite(valore) ? Math.round(valore * 100) / 100 : 0,
+          codice: typeof incasso?.codice === "string" ? incasso.codice.slice(0, 50) : null,
+          fonte_documento: incasso?.fonte?.documento?.slice(0, 200) || null,
+          fonte_pagina: incasso?.fonte?.pagina || null,
+          fonte_testo: incasso?.fonte?.testo?.slice(0, MAX_TESTO_FONTE) || null,
+          fonte_verificata: incasso?.fonte?.verificata === true,
+          fonte_verificabile: incasso?.fonte?.verificabile === true,
+          documento_path: documentoPath,
+        };
+      })
+      .filter((riga) => riga.importo !== 0);
+
     const fornitori = await risolviFornitori(
       supabase,
       condominiumId,
@@ -183,6 +210,21 @@ export async function POST(req: NextRequest) {
     if (righeSpese.length) {
       const { error } = await supabase.from("spese").insert(righeSpese);
       if (error) throw error;
+    }
+
+    // La tabella degli incassi arriva con una migrazione: finché non è
+    // applicata il salvataggio non deve fallire per colpa sua, perché tutto il
+    // resto dell'esercizio è già stato scritto. Si perde la riga, non l'anno.
+    const { error: delIncassiErr } = await supabase
+      .from("incassi")
+      .delete()
+      .eq("condominium_id", condominiumId)
+      .eq("anno", anno);
+    if (delIncassiErr) console.warn("Incassi non cancellabili:", delIncassiErr.message);
+
+    if (righeIncassi.length) {
+      const { error } = await supabase.from("incassi").insert(righeIncassi);
+      if (error) console.warn("Incassi non salvabili:", error.message);
     }
 
     // Come per le spese, ricaricare lo stesso anno sostituisce il dettaglio
@@ -246,7 +288,7 @@ export async function DELETE(req: NextRequest) {
     // Le tre tabelle che compongono un esercizio. Il documento caricato NON si
     // cancella: resta in archivio, così l'anno si può rileggere senza doverlo
     // ricaricare.
-    for (const tabella of ["movimenti", "spese", "bilanci"] as const) {
+    for (const tabella of ["movimenti", "incassi", "spese", "bilanci"] as const) {
       const { error } = await supabase
         .from(tabella)
         .delete()

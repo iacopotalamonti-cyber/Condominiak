@@ -16,6 +16,7 @@ import {
   type ContestoEstrazione,
   type ExtractionMode,
   controlliBilancio,
+  emptyExtraction,
   extractionPrompt,
   pagineDiRiparto,
   promptCorrezione,
@@ -26,6 +27,13 @@ import {
 } from "../../src/lib/anthropic";
 import * as Sentry from "@sentry/node";
 import { riconciliaBilancio, spiegaRiconciliazione } from "../../src/lib/riconciliazione";
+import {
+  estrazioneDa,
+  leggiRendiconto,
+  notaDiLettura,
+  pagineDi,
+  type RendicontoLetto,
+} from "../../src/lib/lettura";
 import type { ExtractedBilancio, ExtractionResult, UploadedFile } from "../../src/lib/types";
 
 const BUCKET = "documenti-condominiali";
@@ -42,6 +50,24 @@ const DEADLINE_MS = 13 * 60_000;
 // Quante riletture mirate al massimo: ognuna è una richiesta in più, e serve
 // solo dove i conti non tornano.
 const MAX_RILETTURE = 3;
+
+// Un rendiconto di formato conosciuto si legge qui, senza chiamare nessuno.
+// Se la lettura quadra al centesimo con il totale che il documento stampa, è
+// migliore di qualunque estrazione: costa zero, non varia fra due tentativi, e
+// si è già verificata da sola.
+async function letturaLibera(
+  bytes: Uint8Array,
+  nome: string
+): Promise<RendicontoLetto | null> {
+  try {
+    return leggiRendiconto(await pagineDi(bytes));
+  } catch (error) {
+    // Un PDF che non si lascia aprire qui si lascia comunque mandare al
+    // modello: la lettura è una scorciatoia, non un passaggio obbligato.
+    console.warn(`Lettura diretta fallita per ${nome}:`, error);
+    return null;
+  }
+}
 
 interface Piece {
   kind: "pdf" | "image";
@@ -451,6 +477,9 @@ export default async (req: Request) => {
     // importi e per le eventuali riletture mirate.
     const sorgenti = new Map<string, { doc: PDFDocument; pagine: number; testo: Map<number, string> }>();
     const testoDocumenti = new Map<string, Map<number, string>>();
+    // I documenti che abbiamo saputo leggere da soli, e la riga che lo spiega.
+    const letture: { file: UploadedFile; letto: RendicontoLetto }[] = [];
+    const noteLettura: string[] = [];
 
     for (const file of files) {
       const { data, error } = await supabase.storage.from(BUCKET).download(file.path);
@@ -458,6 +487,31 @@ export default async (req: Request) => {
         throw new Error(`Download fallito per ${file.name}: ${error?.message ?? "sconosciuto"}`);
       }
       const bytes = new Uint8Array(await data.arrayBuffer());
+
+      if (file.type === "application/pdf") {
+        const letto = await letturaLibera(bytes, file.name);
+
+        if (letto && !letto.motivo) {
+          letture.push({ file, letto });
+          noteLettura.push(notaDiLettura(letto));
+          console.log(`${file.name}: ${notaDiLettura(letto)}`);
+
+          // Quando si sta aggiungendo un bilancio, la lettura è tutto ciò che
+          // serve e il documento non va nemmeno mandato. In fase di
+          // registrazione del condominio invece il rendiconto porta anche
+          // l'indirizzo, le unità e i millesimi, che il motore non legge: il
+          // documento parte lo stesso, e in fondo i conti letti prendono il
+          // posto di quelli estratti.
+          if (mode === "bilancio") continue;
+        } else if (letto) {
+          const avviso =
+            `${file.name}: formato ${letto.formato} riconosciuto, ma la lettura non è ` +
+            `utilizzabile (${letto.motivo}). Lo legge il modello.`;
+          noteLettura.push(avviso);
+          console.warn(avviso);
+        }
+      }
+
       pieces.push(...(await piecesFor(file, bytes)));
 
       if (file.type === "application/pdf") {
@@ -475,7 +529,10 @@ export default async (req: Request) => {
       }
     }
 
-    console.log(`${files.length} documenti divisi in ${pieces.length} blocchi da analizzare`);
+    console.log(
+      `${files.length} documenti: ${letture.length} letti direttamente, ` +
+        `${pieces.length} blocchi da analizzare`
+    );
 
     const results: ExtractionResult[] = [];
     const failures: string[] = [];
@@ -509,11 +566,11 @@ export default async (req: Request) => {
       }
     }
 
-    if (!results.length) {
+    if (!results.length && !letture.length) {
       throw new Error(failures[0] ?? "Nessun dato estratto dai documenti");
     }
 
-    let extracted = mergeExtractions(results);
+    let extracted = results.length ? mergeExtractions(results) : emptyExtraction();
 
     // Prima di rileggere a pagamento: la riconciliazione è aritmetica, gira in
     // locale e costa zero. Il totale stampato sul documento fa da arbitro su
@@ -540,6 +597,21 @@ export default async (req: Request) => {
       }
       return esito.bilancio;
     });
+
+    // Un esercizio letto dal motore non si discute: quadra al centesimo con il
+    // totale stampato, e quello estratto dal modello per lo stesso anno viene
+    // sostituito, non fuso. Fondere ricalcolerebbe i totali di categoria sui
+    // movimenti messi insieme dalle due letture, e il risultato non sarebbe più
+    // quello di nessuna delle due.
+    if (letture.length) {
+      const letti = letture.map(({ file, letto }) => estrazioneDa(letto, file.name));
+      const anniLetti = new Set(letti.map((b) => b.anno));
+      extracted.bilanci = [...letti, ...extracted.bilanci.filter((b) => !anniLetti.has(b.anno))].sort(
+        (x, y) => y.anno - x.anno
+      );
+      extracted.confidence.bilanci = 1;
+      extracted.confidence.spese = 1;
+    }
 
     // Seconda passata solo sugli esercizi che non quadrano. Le riletture
     // vengono messe per prime nella fusione, così a parità di fonte vince la
@@ -591,6 +663,7 @@ export default async (req: Request) => {
 
     const problemi = riepilogoControlli(extracted.bilanci);
     extracted.note = [
+      ...noteLettura,
       ...noteRiconciliazione,
       extracted.note,
       problemi && `Da verificare: ${problemi}`,
@@ -601,7 +674,8 @@ export default async (req: Request) => {
 
     console.log(
       `Estrazione completata: ${extracted.uso.chiamate} chiamate a ${configurazioneModello().model}, ` +
-        `${extracted.uso.tokenIngresso} token in ingresso, ${extracted.uso.tokenUscita} in uscita`
+        `${extracted.uso.tokenIngresso} token in ingresso, ${extracted.uso.tokenUscita} in uscita` +
+        (letture.length ? `, ${letture.length} documenti letti senza modello` : "")
     );
 
     await store.setJSON(jobId, { status: "done", data: extracted });

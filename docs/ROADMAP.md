@@ -26,9 +26,10 @@ ogni rilascio successivo.
       **Resta da fare a mano**: impostare `NEXT_PUBLIC_SENTRY_DSN` su Netlify
       (e `NEXT_PUBLIC_SENTRY_ENV`), altrimenti non parte nulla
 - [x] CORS ristretto a `https://www.condominiak.me` (era `*`)
-- [x] Backup giornaliero del database in `.github/workflows/backup.yml`.
-      **Resta da fare a mano**: aggiungere il segreto `SUPABASE_DB_URL` nelle
-      impostazioni del repository, senza il quale il workflow fallisce
+- [x] Backup giornaliero del database in `.github/workflows/backup.yml`, con il
+      segreto `SUPABASE_DB_URL` impostato. Prima copia prodotta il 20/09/2026.
+      La stringa deve essere quella del **Session pooler**: la connessione
+      diretta risponde solo su IPv6 e i runner di GitHub non la raggiungono
 - [ ] Provare un ripristino su staging: un backup non provato non è un backup
 
 **Fatto quando**: posso rompere il `main` e accorgermene dalla CI invece che da un cliente.

@@ -70,6 +70,11 @@ export type CategoriaSpesa =
   | "manutenzione"
   | "acqua"
   | "giardinaggio"
+  // Un impianto del condominio con costi ricorrenti suoi — assistenza, accisa,
+  // oneri fiscali, manutenzioni straordinarie. Senza una categoria propria
+  // finisce in "varie" insieme a cose che non c'entrano, e i 5.378,85 € di
+  // manutenzione straordinaria del 2023-2024 diventano invisibili.
+  | "fotovoltaico"
   | "varie";
 
 export interface Spesa {
@@ -79,6 +84,31 @@ export interface Spesa {
   anno: number;
   categoria: string;
   importo: number;
+  fonte_documento: string | null;
+  fonte_pagina: number | null;
+  fonte_testo: string | null;
+  fonte_verificata: boolean;
+  fonte_verificabile: boolean;
+  documento_path: string | null;
+  note: string | null;
+}
+
+// Una partita che riguarda un singolo condomino e che il rendiconto tiene
+// dentro il proprio totale: un rimborso assicurativo incassato dal condominio,
+// una spesa riaddebitata a chi l'ha causata. Non è spesa comune, e non è una
+// spesa col segno meno: sommarla alle categorie farebbe sparire un incasso
+// dentro l'assicurazione, toglierla senza dirlo farebbe sembrare che i conti
+// non tornino.
+export interface Incasso {
+  id: string;
+  created_at: string;
+  condominium_id: string;
+  anno: number;
+  descrizione: string;
+  // Il segno con cui la voce compare nel documento: vale sempre
+  // spese = totale stampato - somma degli incassi.
+  importo: number;
+  codice: string | null;
   fonte_documento: string | null;
   fonte_pagina: number | null;
   fonte_testo: string | null;
@@ -223,6 +253,7 @@ export interface ExtractedSpese {
   manutenzione: number;
   acqua: number;
   giardinaggio: number;
+  fotovoltaico: number;
   varie: number;
 }
 
@@ -277,6 +308,14 @@ export interface ExtractedMovimento {
   fonte: Fonte | null;
 }
 
+export interface IncassoEstratto {
+  descrizione: string;
+  importo: number;
+  // Il codice della voce nel rendiconto, che resta lo stesso fra gli anni.
+  codice: string;
+  fonte: Fonte | null;
+}
+
 export interface ExtractedBilancio {
   anno: number;
   prev: number;
@@ -291,6 +330,10 @@ export interface ExtractedBilancio {
   // Il totale stampato nel documento, quando c'è: serve a verificare la somma
   // delle voci senza doversi fidare del modello.
   totale: number;
+  // Le partite di singoli condomini comprese in quel totale. Sono la
+  // differenza fra le voci di spesa e il totale stampato, ed è l'unica cosa
+  // che la spiega.
+  incassi: IncassoEstratto[];
   fonti: Partial<Record<CampoImporto, Fonte>>;
   conflitti: Partial<Record<CampoImporto, ValoreScartato[]>>;
 }

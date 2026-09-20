@@ -32,6 +32,7 @@ const CATEGORIE: CategoriaSpesa[] = [
   "manutenzione",
   "acqua",
   "giardinaggio",
+  "fotovoltaico",
   "varie",
 ];
 

@@ -79,6 +79,7 @@ export function EstraiFornitori({
           spese: bilancio.spese,
           fonti: bilancio.fonti,
           movimenti: bilancio.movimenti,
+          incassi: bilancio.incassi,
           documentoPath: risultato.documenti[0]?.path ?? doc.path,
         }),
       });

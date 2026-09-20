@@ -126,6 +126,7 @@ export const CATEGORIE_SPESA_LABEL: Record<string, string> = {
   manutenzione: "Manutenzione",
   acqua: "Acqua",
   giardinaggio: "Giardinaggio",
+  fotovoltaico: "Fotovoltaico",
   varie: "Varie",
 };
 

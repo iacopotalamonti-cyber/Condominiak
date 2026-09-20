@@ -17,6 +17,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [recupero, setRecupero] = useState(false);
 
   async function handleLogin(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -36,6 +37,37 @@ export default function LoginPage() {
     }
     router.push("/dashboard");
     router.refresh();
+  }
+
+  // Chi ha dimenticato la password non aveva nessuna strada: si rientrava solo
+  // dalla console di Supabase, cioè non si rientrava. Il link porta a /reset,
+  // sullo stesso indirizzo da cui è stato chiesto — così funziona anche dalle
+  // anteprime di deploy, dove il dominio non è quello di produzione.
+  async function handleRecupero(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    setInfo(null);
+
+    const email = new FormData(e.currentTarget).get("email") as string;
+    const supabase = createClient();
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset`,
+    });
+    setLoading(false);
+
+    if (error) {
+      setError(error.message);
+      return;
+    }
+
+    // Non si conferma né si smentisce che l'indirizzo esista: dirlo
+    // permetterebbe a chiunque di scoprire chi ha un account.
+    setInfo(
+      "Se quell'indirizzo ha un account, gli è appena arrivata una mail con il link per " +
+        "scegliere una nuova password. Controlla anche lo spam."
+    );
+    setRecupero(false);
   }
 
   async function handleRegister(e: React.FormEvent<HTMLFormElement>) {
@@ -121,6 +153,45 @@ export default function LoginPage() {
                     Accedi
                   </Button>
                 </form>
+
+                {recupero ? (
+                  <form onSubmit={handleRecupero} className="mt-4 flex flex-col gap-3 border-t pt-4">
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="recupero-email">
+                        A quale indirizzo mandiamo il link?
+                      </Label>
+                      <Input
+                        id="recupero-email"
+                        name="email"
+                        type="email"
+                        required
+                        placeholder="nome@esempio.it"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button type="submit" variant="outline" size="sm" disabled={loading}>
+                        {loading && <Loader2 className="animate-spin" />}
+                        Mandami il link
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setRecupero(false)}
+                      >
+                        Annulla
+                      </Button>
+                    </div>
+                  </form>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setRecupero(true)}
+                    className="mt-4 text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+                  >
+                    Password dimenticata?
+                  </button>
+                )}
               </TabsContent>
 
               <TabsContent value="register">
