@@ -5,7 +5,7 @@ import { Loader2, PartyPopper } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { formatEuro } from "@/lib/condotwin-calculations";
+import { formatEuro } from "@/lib/calcoli";
 import type { ExtractedBilancio, ExtractedInfo, ExtractedUnita } from "@/lib/types";
 
 interface AntepimaStepProps {

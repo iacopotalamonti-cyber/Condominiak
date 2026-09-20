@@ -15,7 +15,7 @@ import {
   millesimiIncompleti,
   quotaAnnua,
   sommaMillesimi,
-} from "../condotwin-calculations.ts";
+} from "../calcoli.ts";
 import type { Bilancio, Spesa } from "../types.ts";
 
 function bilancio(anno: number, campi: Partial<Bilancio> = {}): Bilancio {

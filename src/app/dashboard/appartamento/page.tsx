@@ -15,7 +15,7 @@ import {
   quotaAnnua,
   quotaMensile,
   sommaMillesimi,
-} from "@/lib/condotwin-calculations";
+} from "@/lib/calcoli";
 import { esercizioCorrente } from "@/lib/bilancio";
 import type { Bilancio, Documento, Pagamento, Spesa, Unita } from "@/lib/types";
 

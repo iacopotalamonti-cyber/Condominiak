@@ -14,7 +14,7 @@ import {
   CATEGORIE_SPESA_LABEL,
   formatEuro,
   formatEuroPreciso,
-} from "@/lib/condotwin-calculations";
+} from "@/lib/calcoli";
 import { SENZA_FORNITORE, perFornitore } from "@/lib/fornitori";
 import type { Fornitore, Movimento } from "@/lib/types";
 

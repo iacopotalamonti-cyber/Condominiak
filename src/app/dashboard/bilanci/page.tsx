@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { FonteLink } from "@/components/estrazione/FonteLink";
 import { EliminaEsercizio } from "@/components/dashboard/EliminaEsercizio";
-import { formatEuro, variazioneAnnua } from "@/lib/condotwin-calculations";
+import { formatEuro, variazioneAnnua } from "@/lib/calcoli";
 import { esercizi } from "@/lib/bilancio";
 import type { Bilancio, FonteSalvata, Spesa } from "@/lib/types";
 

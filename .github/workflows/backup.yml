@@ -1,0 +1,54 @@
+# Backup giornaliero del database di produzione.
+#
+# Il piano Free di Supabase non fa backup automatici: finora non ne esisteva
+# nessuno, su un database che contiene dati veri. Questo workflow ne produce
+# uno al giorno e lo conserva 30 giorni.
+#
+# ATTENZIONE: l'archivio prodotto contiene dati personali dei condòmini (nomi,
+# email, importi, morosità). Resta scaricabile da chiunque abbia accesso a
+# questo repository: tenerlo privato non è un dettaglio.
+#
+# Serve un solo segreto, in Settings → Secrets and variables → Actions:
+#   SUPABASE_DB_URL   la stringa di connessione del progetto di produzione,
+#                     presa da Supabase → Connect → Session pooler.
+#
+# Session pooler e non connessione diretta: db.<ref>.supabase.co risponde solo
+# su IPv6, e i runner di GitHub sono solo IPv4. Nemmeno Transaction pooler, che
+# sta sulla porta 6543 e non regge pg_dump.
+#
+# Un backup non provato non è un backup: una volta l'anno va ripristinato su
+# staging per verificare che funzioni.
+
+name: Backup database
+
+on:
+  schedule:
+    - cron: "0 3 * * *" # ogni notte alle 03:00 UTC
+  workflow_dispatch: # e a mano, quando serve
+
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Struttura (tabelle, indici, policy)
+        run: supabase db dump --db-url "$SUPABASE_DB_URL" -f schema.sql
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+
+      - name: Dati
+        run: supabase db dump --db-url "$SUPABASE_DB_URL" --data-only -f dati.sql
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+
+      - name: Conserva l'archivio
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-${{ github.run_id }}
+          path: |
+            schema.sql
+            dati.sql
+          retention-days: 30

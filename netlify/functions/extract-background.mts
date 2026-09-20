@@ -24,6 +24,7 @@ import {
   normalizeExtraction,
   parseExtractionOutput,
 } from "../../src/lib/anthropic";
+import * as Sentry from "@sentry/node";
 import { riconciliaBilancio, spiegaRiconciliazione } from "../../src/lib/riconciliazione";
 import type { ExtractedBilancio, ExtractionResult, UploadedFile } from "../../src/lib/types";
 
@@ -397,6 +398,19 @@ export default async (req: Request) => {
   };
   console.log(`extract-background invoked: jobId=${jobId}, files=${files.length}, mode=${mode}`);
   console.log(`env check: url=${Boolean(Netlify.env.get("NEXT_PUBLIC_SUPABASE_URL"))} key=${Boolean(Netlify.env.get("SUPABASE_SERVICE_ROLE_KEY"))} anthropic=${Boolean(Netlify.env.get("ANTHROPIC_API_KEY"))}`);
+  // L'estrazione è il punto dove un errore resta invisibile: gira in
+  // background, l'utente vede solo un lavoro che non finisce mai. Qui le
+  // variabili non arrivano da process.env (vedi la nota sopra).
+  const sentryDsn = Netlify.env.get("NEXT_PUBLIC_SENTRY_DSN");
+  if (sentryDsn && !Sentry.isInitialized()) {
+    Sentry.init({
+      dsn: sentryDsn,
+      environment: Netlify.env.get("CONTEXT") ?? "unknown",
+      tracesSampleRate: 0,
+      sendDefaultPii: false,
+    });
+  }
+
   const store = getStore("extractions");
   const deadline = Date.now() + DEADLINE_MS;
 
@@ -593,6 +607,11 @@ export default async (req: Request) => {
     await store.setJSON(jobId, { status: "done", data: extracted });
   } catch (error) {
     console.error("Background extraction error:", error);
+    // Il jobId permette di ritrovare nei log della funzione l'estrazione
+    // esatta a cui l'errore appartiene.
+    Sentry.captureException(error, { tags: { jobId, mode } });
+    // La funzione termina subito dopo: senza flush l'evento non parte.
+    await Sentry.flush(2000).catch(() => {});
     await store.setJSON(jobId, { status: "error", error: messageOf(error) });
   }
 };

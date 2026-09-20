@@ -6,7 +6,7 @@ import { Loader2, RefreshCw } from "lucide-react";
 
 import { analizzaDocumenti, messaggioErrore } from "@/lib/extraction-client";
 import { Button } from "@/components/ui/button";
-import { formatUso } from "@/lib/condotwin-calculations";
+import { formatUso } from "@/lib/calcoli";
 import { etichettaDocumento } from "@/lib/documenti-client";
 import type { DocumentoArchiviato } from "@/lib/types";
 

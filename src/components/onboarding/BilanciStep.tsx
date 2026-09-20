@@ -12,7 +12,7 @@ import {
   sommaSpese,
 } from "@/lib/anthropic";
 import { percorsoDocumento } from "@/lib/documenti-client";
-import { formatEuro } from "@/lib/condotwin-calculations";
+import { formatEuro } from "@/lib/calcoli";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

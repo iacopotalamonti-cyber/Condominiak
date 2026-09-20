@@ -2,7 +2,7 @@ import { CheckCircle2, AlertTriangle, XCircle, Wrench } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { IMPIANTI_LABEL } from "@/lib/condotwin-calculations";
+import { IMPIANTI_LABEL } from "@/lib/calcoli";
 import type { Impianto } from "@/lib/types";
 
 const STATO_META = {

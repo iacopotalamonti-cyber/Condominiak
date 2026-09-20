@@ -27,7 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CampoImporto } from "@/components/estrazione/CampoImporto";
 import { ControlliBilancio } from "@/components/estrazione/ControlliBilancio";
-import { formatEuro, formatUso } from "@/lib/condotwin-calculations";
+import { formatEuro, formatUso } from "@/lib/calcoli";
 import type {
   CampoImporto as CampoImportoKey,
   DocumentoArchiviato,

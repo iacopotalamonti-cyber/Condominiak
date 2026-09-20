@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 
+interface UnitaConCondominio {
+  id: string;
+  condominium_id: string;
+  condominiums: { owner_id: string } | { owner_id: string }[] | null;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const supabaseAuth = await createClient();
@@ -31,7 +37,13 @@ export async function POST(req: NextRequest) {
       .eq("id", unitaId)
       .single();
 
-    if (unitaErr || !unita || (unita as any).condominiums.owner_id !== user.id) {
+    // La relazione verso condominiums arriva come oggetto con !inner, ma il
+    // tipo generato la ammette anche come array: gestiamo entrambe le forme
+    // invece di zittire il controllo con un any.
+    const condominio = (unita as UnitaConCondominio | null)?.condominiums;
+    const ownerId = Array.isArray(condominio) ? condominio[0]?.owner_id : condominio?.owner_id;
+
+    if (unitaErr || !unita || ownerId !== user.id) {
       return NextResponse.json(
         { success: false, error: "Unità non trovata o non autorizzata" },
         { status: 403 }

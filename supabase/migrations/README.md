@@ -1,5 +1,10 @@
 # Migrazioni
 
+`00000000000000_schema_iniziale.sql` contiene lo schema completo — tabelle,
+indici, policy RLS, bucket storage — ricostruito dal database di produzione il
+19/09/2026. Su un database nuovo si esegue per primo; le quattro migrazioni
+datate che lo seguono non trovano più nulla da fare, e va bene così.
+
 Le migrazioni vanno applicate in ordine di nome, una sola volta, sul progetto
 Supabase del condominio. Due modi equivalenti:
 

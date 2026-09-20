@@ -2,7 +2,7 @@
 
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
-import { formatEuro } from "@/lib/condotwin-calculations";
+import { formatEuro } from "@/lib/calcoli";
 import type { Bilancio } from "@/lib/types";
 
 export function FondoRiservaChart({ bilanci }: { bilanci: Bilancio[] }) {
