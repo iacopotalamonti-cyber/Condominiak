@@ -7,7 +7,7 @@ import { getDocumentProxy } from "unpdf";
 
 import { leggi, riconosci } from "../src/lib/motore.ts";
 import { PROFILI } from "../src/lib/profili.ts";
-import { classifica, PROFILO_ENRIQUES_3 } from "../src/lib/profilo.ts";
+import { classifica, mappaturaPer } from "../src/lib/profilo.ts";
 import type { Frammento, Pagina, Riga } from "../src/lib/rendiconto.ts";
 
 async function pagineDi(percorso: string): Promise<Pagina[]> {
@@ -45,7 +45,7 @@ const lettura = leggi(pagine, profilo);
 console.log(`formato: ${lettura.profilo}\n`);
 for (const v of lettura.voci) {
   const secondo = v.importoSecondario === null ? "" : `  +${eur(v.importoSecondario)}`;
-  console.log(`  ${eur(v.importo).padStart(12)}${secondo.padEnd(14)}  p${String(v.pagina).padStart(2)}  ${v.descrizione.slice(0, 40)}`);
+  console.log(`  [${v.chiave}] ${eur(v.importo).padStart(11)}${secondo.padEnd(12)}  p${String(v.pagina).padStart(2)}  ${v.descrizione.slice(0, 38)}`);
 }
 for (const p of lettura.personali) {
   console.log(`  ${eur(p.importo).padStart(12)}${"".padEnd(14)}  a contatore  ${p.descrizione.slice(0, 34)}`);
@@ -54,15 +54,14 @@ console.log(`\n${lettura.voci.length} voci, ${lettura.personali.length} a contat
 console.log(`totale stampato  ${eur(lettura.totaleGenerale).padStart(12)}`);
 console.log(`scarto           ${eur(lettura.scarto).padStart(12)}`);
 
-// Le categorie si possono calcolare solo se conosciamo la mappatura di questo
-// condominio: oggi ne esiste una sola, per i rendiconti di Studio Tosiani.
-if (profilo.nome === "Studio Tosiani") {
-  const c = classifica(lettura, PROFILO_ENRIQUES_3);
+const mappatura = mappaturaPer(profilo.nome);
+if (mappatura) {
+  const c = classifica(lettura, mappatura);
   console.log("\n--- categorie ---");
   for (const [categoria, importo] of Object.entries(c.spese).sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))) {
     console.log(`${categoria.padEnd(16)} ${eur(importo ?? 0).padStart(12)}`);
   }
   console.log(`${"TOTALE SPESE".padEnd(16)} ${eur(c.totaleSpese).padStart(12)}`);
-  for (const r of c.rimborsi) console.log(`incasso a parte  ${eur(r.importo).padStart(12)}  ${r.descrizione.slice(0, 36)}`);
+  for (const r of c.rimborsi) console.log(`a parte          ${eur(r.importo).padStart(12)}  ${r.descrizione.slice(0, 36)}`);
   for (const n of c.nonMappate) console.log(`NON MAPPATO      ${eur(n.importo).padStart(12)}  ${n.codice} ${n.descrizione.slice(0, 30)}`);
 }

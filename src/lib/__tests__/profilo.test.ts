@@ -1,7 +1,14 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 
-import { classifica, PROFILO_ENRIQUES_3, RIMBORSO } from "../profilo.ts";
+import {
+  classifica,
+  mappaturaPer,
+  MAPPATURA_CONTAVALLI,
+  MAPPATURA_MULTIGEST,
+  PROFILO_ENRIQUES_3,
+  RIMBORSO,
+} from "../profilo.ts";
 import type { Lettura, VoceLetta } from "../motore.ts";
 
 function voce(chiave: string, importo: number, secondario = false): VoceLetta {
@@ -89,4 +96,46 @@ test("le categorie dell'esercizio 2023-2024 sommano al totale del documento", ()
   assert.equal(esito.spese.riscaldamento, 6037.44);
   assert.equal(esito.spese.acqua, 4967.03);
   assert.equal(esito.spese.manutenzione, 1801.86);
+});
+
+test("ogni formato conosciuto ha la sua mappatura, gli altri no", () => {
+  assert.ok(mappaturaPer("Studio Tosiani"));
+  assert.ok(mappaturaPer("Studio Contavalli"));
+  assert.ok(mappaturaPer("MULTIGEST"));
+  assert.equal(mappaturaPer("Studio di qualcun altro"), null);
+});
+
+test("Contavalli: le categorie sommano al totale stampato del 2019-2020", () => {
+  // Voci vere, già raddrizzate di segno dal motore. La spesa personale di un
+  // singolo condomino resta fuori: 12.425,35 meno 31,30 fa 12.394,05.
+  const voci = [
+    voce("Generali di Proprietà", 6406.56), voce("Generali di Gestione", 206.51),
+    voce("Consumi riscaldamento/Raffrescamento", 3112.99), voce("Consumi Acqua", 977.38),
+    voce("Pulizia e luce scale", 922.11), voce("Elevatore Gestione", 306.11),
+    voce("Corsello autorimesse", 457.69), voce("Energia elettrica individuale BOX", 36.0),
+    voce("Spese personali", -31.3),
+  ];
+
+  const esito = classifica(lettura(voci), MAPPATURA_CONTAVALLI);
+  assert.equal(esito.nonMappate.length, 0);
+  assert.equal(esito.totaleSpese, 12425.35);
+  assert.equal(Math.round((esito.totaleSpese + esito.totaleRimborsi) * 100) / 100, 12394.05);
+  // "Generali di Proprietà" tiene dentro polizza, amministratore e banca: la
+  // categoria è più grossa di quella degli anni successivi, e si vede.
+  assert.equal(esito.spese.amm, 6613.07);
+});
+
+test("MULTIGEST: si mappa il numero del conto, che resta uguale fra gli anni", () => {
+  const voci = [
+    voce("1", 8452.0), voce("2", 2870.86), voce("4", 790.19), voce("6", 11666.47),
+    voce("9", 23.24), voce("11", 1143.96), voce("12", 98.0), voce("14", 2344.49),
+    voce("15", 4732.11), voce("16", 123.56),
+  ];
+
+  const esito = classifica(lettura(voci), MAPPATURA_MULTIGEST);
+  assert.equal(esito.nonMappate.length, 0);
+  assert.equal(esito.totaleSpese, 32146.88);
+  assert.equal(esito.totaleRimborsi, 98);
+  assert.equal(Math.round((esito.totaleSpese + esito.totaleRimborsi) * 100) / 100, 32244.88);
+  assert.equal(esito.spese.riscaldamento, 11666.47);
 });

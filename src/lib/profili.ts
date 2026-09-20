@@ -31,6 +31,7 @@ export const CONTAVALLI: ProfiloFormato = {
   impronta: "Bilancio dettagliato per conto",
   colonnaTotale: 2,
   voce: { tipo: "intestazione", rientroMassimo: 5 },
+  segno: -1,
   totaleGenerale: "^TOTALE\\s+(-?[\\d.]+,\\d{2})$",
 };
 

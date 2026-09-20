@@ -185,3 +185,67 @@ export function classifica(lettura: Lettura, profilo: Profilo): Classificazione 
     totaleRimborsi: somma(rimborsi.map((r) => r.importo)),
   };
 }
+
+// ---------------------------------------------------------------------------
+// Studio Contavalli
+// ---------------------------------------------------------------------------
+//
+// Le voci di questo formato sono più grosse delle categorie dell'app, e non si
+// può rimediare mappando meglio: "Generali di Proprietà" contiene insieme la
+// polizza UnipolSai, il compenso dell'amministratore, le spese bancarie, la
+// connessione del fotovoltaico e i lavori dell'impresa edile. Finisce in
+// "amm" perché è lì che sta la parte maggiore, ma chi confronta le categorie
+// fra il 2019-2020 e gli anni dopo sta confrontando cose di grana diversa.
+// Separarle vorrebbe dire scendere al singolo movimento: si può fare, e non
+// serve per rispondere alla domanda "quanto spendiamo all'anno".
+
+export const MAPPATURA_CONTAVALLI: Profilo = {
+  nome: "Studio Contavalli — Via Enriques 3",
+  voci: {
+    "Generali di Proprietà": "amm", // polizza, amministratore, banca, fotovoltaico, lavori
+    "Generali di Gestione": "amm",
+    "Consumi riscaldamento/Raffrescamento": "riscaldamento",
+    "Consumi Acqua": "acqua",
+    "Pulizia e luce scale": "pulizia",
+    "Elevatore Gestione": "ascensore",
+    "Corsello autorimesse": "varie",
+    "Energia elettrica individuale BOX": "illuminazione",
+    // Spesa di un singolo condomino, riaddebitata a lui: non è spesa comune.
+    "Spese personali": RIMBORSO,
+  },
+  personali: {},
+};
+
+// ---------------------------------------------------------------------------
+// MULTIGEST
+// ---------------------------------------------------------------------------
+//
+// I conti sono numerati e la numerazione regge fra gli anni: gli stessi dieci
+// numeri compaiono nel 2020-2021 e nel 2021-2022, anche quando il nome cambia
+// ("ASCENSORE" diventa "CONTO ASCENSORE"). Si mappa quindi il numero, che è
+// stabile, e non il nome, che non lo è.
+
+export const MAPPATURA_MULTIGEST: Profilo = {
+  nome: "MULTIGEST — Via Enriques 3",
+  voci: {
+    "1": "amm", // Generali
+    "2": "pulizia", // pulizia e luce scale insieme: il conto non le separa
+    "4": "varie", // corsello autorimesse
+    "6": "riscaldamento", // riscaldamento, raffrescamento e ACS
+    "9": "fotovoltaico",
+    "11": "manutenzione",
+    "12": RIMBORSO, // personali: riaddebitate al singolo condomino
+    "14": "acqua",
+    "15": "ascensore",
+    "16": "varie", // posti auto esterni
+  },
+  personali: {},
+};
+
+/** La mappatura da usare per un formato, se la conosciamo. */
+export function mappaturaPer(formato: string): Profilo | null {
+  if (formato === "Studio Tosiani") return PROFILO_ENRIQUES_3;
+  if (formato === "Studio Contavalli") return MAPPATURA_CONTAVALLI;
+  if (formato === "MULTIGEST") return MAPPATURA_MULTIGEST;
+  return null;
+}

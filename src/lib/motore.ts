@@ -46,6 +46,12 @@ export interface ProfiloFormato {
   /** Seconda colonna di totale, quando il formato separa proprietario e conduttore. */
   colonnaTotaleSecondaria?: number;
   voce: RegolaVoce;
+  /**
+   * -1 quando il formato stampa le spese come uscite di cassa, col segno meno.
+   * Serve perché i totali di formati diversi siano confrontabili fra loro
+   * senza che se ne ricordi chi li legge.
+   */
+  segno?: -1 | 1;
   /** Espressione con un gruppo di cattura sul totale generale stampato. */
   totaleGenerale?: string;
   /** Voci addebitate a contatore, esposte a parte (P00, P01…). */
@@ -269,7 +275,16 @@ export function leggi(pagine: Pagina[], profilo: ProfiloFormato): Lettura {
     }
   }
 
-  const lette = voci.filter((v) => v.importo !== 0 || v.importoSecondario !== null);
+  const segno = profilo.segno ?? 1;
+  const lette = voci
+    .filter((v) => v.importo !== 0 || v.importoSecondario !== null)
+    .map((v) => ({
+      ...v,
+      importo: arrotonda(v.importo * segno),
+      importoSecondario: v.importoSecondario === null ? null : arrotonda(v.importoSecondario * segno),
+    }));
+  for (const p of personali) p.importo = arrotonda(p.importo * segno);
+  if (totaleGenerale !== null) totaleGenerale = arrotonda(totaleGenerale * segno);
   const somma = arrotonda(
     lette.reduce((tot, v) => tot + v.importo + (v.importoSecondario ?? 0), 0) +
       personali.reduce((tot, p) => tot + p.importo, 0)

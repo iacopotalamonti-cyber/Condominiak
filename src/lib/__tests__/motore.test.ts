@@ -54,7 +54,9 @@ test("la stessa colonna vale diversamente a seconda della scheda", () => {
 
   const perContavalli = leggi([{ numero: 1, righe: [riga(700, COLONNE_CONTAVALLI), ...comune] }], CONTAVALLI);
   assert.equal(perContavalli.voci.length, 1);
-  assert.equal(perContavalli.voci[0].importo, -977.38);
+  // Il formato stampa le uscite col segno meno: la scheda lo dichiara e il
+  // motore le raddrizza, così i totali di formati diversi si confrontano.
+  assert.equal(perContavalli.voci[0].importo, 977.38);
 
   // Con la scheda Tosiani la colonna 2 non è un totale di voce: nulla da
   // leggere, e nessun numero inventato.
