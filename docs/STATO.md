@@ -84,10 +84,9 @@ sono affatto:
   deploy non puntano al progetto di staging, continuano a scrivere sul database
   di produzione.
 - **Sentry è collegato ma spento finché manca il DSN su Netlify.**
-- **Il primo backup non è ancora girato**: il workflow esiste
-  (`.github/workflows/backup.yml`) ma resta fermo finché nel repository non c'è
-  il segreto `SUPABASE_DB_URL`. Fino ad allora il database, che contiene dati
-  reali, non ha alcuna copia.
+- **Il backup non è ancora stato provato con un ripristino.** Dal 20/09/2026 il
+  database ha una copia giornaliera (`.github/workflows/backup.yml`), ma finché
+  non se ne ripristina una su staging non sappiamo se sia utilizzabile.
 - **L'invito ai condòmini non collega nessuno** (verificato): la policy
   `resident_access` su `unita` impedisce a un invitato di rivendicare la propria
   unità, e l'update client-side fallisce in silenzio. Vedi `SERVIZI.md` → "Come
