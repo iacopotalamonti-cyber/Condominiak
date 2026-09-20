@@ -10,7 +10,7 @@
 // nel documento per intero, descrizione e fornitore. "Manutenzioni generali
 // impianto" da solo non dice quale impianto — la riga sotto dice "ascensore".
 
-import type { TotaliDichiarati, Voce } from "./rendiconto";
+import type { Lettura, VoceLetta } from "./motore.ts";
 
 export type Categoria =
   | "riscaldamento"
@@ -130,24 +130,19 @@ export interface Classificazione {
   totaleRimborsi: number;
 }
 
-function importoDiVoce(voce: Voce): number {
-  return (voce.totale ?? 0) + (voce.totaleInquilino ?? 0);
+function importoDiVoce(voce: VoceLetta): number {
+  return voce.importo + (voce.importoSecondario ?? 0);
 }
 
 /**
- * Assegna a ogni voce la sua categoria, secondo il profilo.
+ * Assegna a ogni voce letta la sua categoria, secondo il profilo.
  *
- * Le spese personali entrano nelle stesse categorie: il riscaldamento del
- * condominio è la somma di quel che resta nel riparto generale e di quel che
- * viene addebitato a contatore. Nel 2023-2024 il riparto generale si annulla
- * del tutto e resta solo il contatore; nel 2024-2025 restano 269,50 di
- * conduzione, e vanno sommati.
+ * Le spese addebitate a contatore entrano nelle stesse categorie: il
+ * riscaldamento del condominio è la somma di quel che resta nel riparto
+ * generale e di quel che viene addebitato a consumo. Nel 2023-2024 il riparto
+ * generale si annulla del tutto e resta solo il contatore.
  */
-export function classifica(
-  voci: Voce[],
-  totali: TotaliDichiarati,
-  profilo: Profilo
-): Classificazione {
+export function classifica(lettura: Lettura, profilo: Profilo): Classificazione {
   const spese: Partial<Record<Categoria, number>> = {};
   const rimborsi: RigaClassificata[] = [];
   const nonMappate: RigaClassificata[] = [];
@@ -164,16 +159,20 @@ export function classifica(
     spese[destinazione] = Math.round(((spese[destinazione] ?? 0) + riga.importo) * 100) / 100;
   };
 
-  for (const voce of voci) {
-    aggiungi(profilo.voci[voce.codice], {
-      codice: voce.codice,
+  for (const voce of lettura.voci) {
+    aggiungi(profilo.voci[voce.chiave], {
+      codice: voce.chiave,
       descrizione: voce.descrizione,
       importo: importoDiVoce(voce),
     });
   }
 
-  for (const personale of totali.personali) {
-    aggiungi(profilo.personali[personale.codice], personale);
+  for (const personale of lettura.personali) {
+    aggiungi(profilo.personali[personale.chiave], {
+      codice: personale.chiave,
+      descrizione: personale.descrizione,
+      importo: personale.importo,
+    });
   }
 
   const somma = (valori: number[]) => Math.round(valori.reduce((a, b) => a + b, 0) * 100) / 100;
