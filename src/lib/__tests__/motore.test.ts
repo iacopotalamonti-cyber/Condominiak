@@ -155,3 +155,82 @@ test("Contavalli: la continuazione di un movimento non diventa una voce", () => 
   assert.equal(lettura.voci.length, 1);
   assert.equal(lettura.voci[0].descrizione, "Consumi Acqua");
 });
+
+// Le x sono quelle vere di un rendiconto Tosiani: la descrizione a 72, il
+// numero di documento a 229, la data a 253, l'importo del movimento a 323, il
+// parziale della voce a 400.
+const INTESTAZIONE: [number, string][] = [
+  [38, "Codice"],
+  [72, "Descrizione voce di spesa"],
+  [230, "Doc"],
+  [301, "movimento"],
+  [305, "Importo"],
+  [362, "Parziale"],
+  [420, "Totale"],
+  [473, "Parziale"],
+  [532, "Totale"],
+];
+
+function paginaTosiani(righe: [number, string][][]): Pagina {
+  return {
+    numero: 8,
+    righe: righe.map((frammenti, indice) => ({
+      y: 800 - indice * 12,
+      frammenti: frammenti.map(([x, testo]) => ({ x, xFine: x + testo.length * 5, testo })),
+    })),
+  };
+}
+
+const PAGINA = paginaTosiani([
+  INTESTAZIONE,
+  [[38, "002.004"], [72, "Canone manutenzione ascensore"]],
+  [[72, "Otis Servizi S.r.l."], [229, "NP105"], [253, "18/11/24"], [323, "154,79"]],
+  [[72, "Manutenzione ordinaria del quarto trimestre"]],
+  [[72, "Otis Servizi S.r.l."], [229, "NP131"], [253, "18/02/25"], [323, "45,21"], [400, "200,00"]],
+]);
+
+test("la riga di un movimento dà il fornitore, la data e l'importo", () => {
+  const voci = leggi([PAGINA], TOSIANI).voci;
+  assert.equal(voci.length, 1);
+  assert.equal(voci[0].importo, 200);
+
+  // I movimenti si tengono perché sommano esattamente al totale della voce.
+  assert.equal(voci[0].movimenti.length, 2);
+  assert.deepEqual(
+    voci[0].movimenti.map((m) => [m.fornitore, m.data, m.importo]),
+    [
+      ["Otis Servizi S.r.l.", "2024-11-18", 154.79],
+      ["Otis Servizi S.r.l.", "2025-02-18", 45.21],
+    ]
+  );
+});
+
+test("dei movimenti che non sommano al totale non resta niente", () => {
+  // Succede quando una fattura è ripartita a percentuale fra più voci: la
+  // riga c'è, ma appartiene solo in parte a questa voce. Un elenco a cui
+  // manca un pezzo si legge come se fosse completo, quindi si butta.
+  const incompleta = paginaTosiani([
+    INTESTAZIONE,
+    [[38, "002.003"], [72, "Energia elettrica ascensore (30% POD 966)"]],
+    [[72, "E-Distribuzione"], [229, "FT12"], [253, "02/03/24"], [323, "500,00"], [400, "150,00"]],
+  ]);
+
+  const voci = leggi([incompleta], TOSIANI).voci;
+  assert.equal(voci[0].importo, 150);
+  assert.equal(voci[0].movimenti.length, 0);
+});
+
+test("senza numero di documento il nome non viene tagliato al posto suo", () => {
+  const senzaNumero = paginaTosiani([
+    INTESTAZIONE,
+    [[38, "001.001"], [72, "Compenso amministratore"]],
+    [[72, "Tosiani Angelo"], [253, "22/10/25"], [323, "250,00"], [400, "250,00"]],
+  ]);
+
+  const movimento = leggi([senzaNumero], TOSIANI).voci[0].movimenti[0];
+  // La data si legge lo stesso; il fornitore no, perché toglierlo insieme al
+  // numero di documento che non c'è lascerebbe la riga senza nome.
+  assert.equal(movimento.data, "2025-10-22");
+  assert.equal(movimento.fornitore, "");
+  assert.equal(movimento.descrizione, "Tosiani Angelo 22/10/25");
+});

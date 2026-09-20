@@ -278,15 +278,12 @@ function movimentiDa(letto: RendicontoLetto, documento: string): ExtractedMovime
 
     for (const movimento of voce.movimenti) {
       movimenti.push({
-        // La data sta dentro la descrizione, in formati diversi da un
-        // amministratore all'altro: estrarla vorrebbe dire indovinare, e una
-        // data sbagliata è peggio di una data assente.
-        data: "",
+        data: movimento.data,
         descrizione: movimento.descrizione,
-        // Stesso discorso per il fornitore: il nome è la prima parte della
-        // descrizione, ma "dove finisce" cambia a ogni riga. Lo risolve
-        // l'anagrafica fornitori, che confronta con i nomi già noti.
-        fornitore: "",
+        // Vuoto quando il formato non dà al fornitore una colonna sua: la riga
+        // resta, con la sua descrizione, e finisce fra le non attribuite. È
+        // meglio di un nome ritagliato a occhio dalla descrizione.
+        fornitore: movimento.fornitore,
         categoria: destinazione,
         importo: movimento.importo,
         fonte: fonteDi(documento, movimento.pagina, movimento.descrizione),

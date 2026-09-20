@@ -17,6 +17,9 @@ export const TOSIANI: ProfiloFormato = {
   colonnaTotale: 1,
   colonnaTotaleSecondaria: 3,
   voce: { tipo: "codice", schema: "^\\d{3}\\.\\d{3}$" },
+  // Le righe dei movimenti hanno quattro colonne: chi, numero di documento,
+  // data, importo. È l'unico dei tre formati in cui il fornitore sta da solo.
+  fornitore: { tipo: "prima-del-numero" },
   totaleGenerale: "Totale\\s+Gen\\.\\s*([\\d.]+,\\d{2})",
   personali: "^P\\d{2}$",
   unisciVociSpezzate: true,

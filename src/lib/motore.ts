@@ -27,6 +27,16 @@ import { importoDi, mappaColonne, type MappaColonne, type Pagina, type Riga } fr
  * - `intestazione`: una riga di solo testo al margine sinistro ("Consumi Acqua")
  * - `chiusura`: una riga che dichiara insieme nome e totale ("Tot. Conto n.9 € 8,98")
  */
+/**
+ * Dove sta, dentro la riga di un movimento, il nome di chi ha emesso la spesa.
+ *
+ * "prima-del-numero": la riga è "Tosiani Angelo | NP105 | 18/11/24 | 154,79" —
+ * il nome è tutto ciò che sta prima del numero di documento, e il numero di
+ * documento è il frammento subito a sinistra della data. Nessuna coordinata
+ * fissa: si trova la data, e il resto viene da sé.
+ */
+export type RegolaFornitore = { tipo: "prima-del-numero" };
+
 export type RegolaVoce =
   | { tipo: "codice"; schema: string }
   | { tipo: "intestazione"; rientroMassimo: number }
@@ -46,6 +56,8 @@ export interface ProfiloFormato {
   /** Seconda colonna di totale, quando il formato separa proprietario e conduttore. */
   colonnaTotaleSecondaria?: number;
   voce: RegolaVoce;
+  /** Come si isola il fornitore in una riga di movimento, dove è isolabile. */
+  fornitore?: RegolaFornitore;
   /**
    * -1 quando il formato stampa le spese come uscite di cassa, col segno meno.
    * Serve perché i totali di formati diversi siano confrontabili fra loro
@@ -81,6 +93,10 @@ export interface ProfiloFormato {
  */
 export interface MovimentoLetto {
   descrizione: string;
+  /** Chi ha emesso la spesa, quando il formato gli dà una colonna sua. */
+  fornitore: string;
+  /** Data del documento in formato AAAA-MM-GG, "" se la riga non la porta. */
+  data: string;
   importo: number;
   pagina: number;
 }
@@ -107,6 +123,19 @@ export interface Lettura {
   totaleGenerale: number | null;
   /** Somma di quanto letto meno il totale stampato: quanto non abbiamo spiegato. */
   scarto: number | null;
+}
+
+// Le date dei documenti sono stampate all'italiana e spesso con l'anno a due
+// cifre: "18/11/24". Il secolo non è scritto da nessuna parte, ma un rendiconto
+// condominiale non porta fatture dell'Ottocento.
+const DATA = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})$/;
+
+function dataDi(testo: string): string {
+  const trovato = testo.trim().match(DATA);
+  if (!trovato) return "";
+  const [, giorno, mese, anno] = trovato;
+  const completo = anno.length === 4 ? anno : `20${anno}`;
+  return `${completo}-${mese.padStart(2, "0")}-${giorno.padStart(2, "0")}`;
 }
 
 /** La colonna più a sinistra: l'importo del singolo movimento. */
@@ -304,13 +333,28 @@ export function leggi(pagine: Pagina[], profilo: ProfiloFormato): Lettura {
           corrente.importoSecondario = valore;
           if (!voci.includes(corrente)) voci.push(corrente);
         } else if (indice === COLONNA_MOVIMENTO) {
+          const sinistra = ordinati.filter((f) => f.x < frammento.x && importoDi(f.testo) === null);
+          const indiceData = sinistra.findIndex((f) => DATA.test(f.testo.trim()));
+
           corrente.movimenti.push({
-            descrizione: ordinati
-              .filter((f) => f.x < frammento.x && importoDi(f.testo) === null)
+            descrizione: sinistra
               .map((f) => f.testo.trim())
               .filter(Boolean)
               .join(" ")
               .trim(),
+            // Il fornitore si stacca solo se prima della data resta qualcosa
+            // oltre al numero di documento: altrimenti si taglierebbe via il
+            // nome invece del numero.
+            fornitore:
+              profilo.fornitore && indiceData > 1
+                ? sinistra
+                    .slice(0, indiceData - 1)
+                    .map((f) => f.testo.trim())
+                    .filter(Boolean)
+                    .join(" ")
+                    .trim()
+                : "",
+            data: indiceData >= 0 ? dataDi(sinistra[indiceData].testo) : "",
             importo: valore,
             pagina: pagina.numero,
           });
