@@ -34,6 +34,26 @@ ogni rilascio successivo.
 
 **Fatto quando**: posso rompere il `main` e accorgermene dalla CI invece che da un cliente.
 
+## Fuori piano — I numeri giusti (20/09/2026)
+
+Non era in piano: è nata dalla domanda "quanto abbiamo speso quest'anno", a cui
+l'app rispondeva con numeri che non tornavano con la carta.
+
+- [x] Motore di lettura dei rendiconti, con i formati descritti come dati
+      (`src/lib/motore.ts`, `src/lib/profili.ts`)
+- [x] Tre formati riconosciuti: Studio Tosiani, Studio Contavalli, MULTIGEST
+- [x] Corrispondenza fra codice di voce e categoria per i tre formati
+      (`src/lib/profilo.ts`)
+- [x] Un rendiconto riconosciuto non passa più dal modello: costo zero
+- [x] Fornitore e data letti dalle righe dei movimenti, dove il formato li espone
+- [x] Categoria `fotovoltaico`
+- [x] Tabella `incassi` e sezione dedicata in Analisi spese
+- [x] Sei esercizi (2020-2025) riscritti in produzione dai documenti, scarto 0,00
+- [x] Recupero password (`/reset`): prima si rientrava solo dalla console di Supabase
+- [ ] Caricare i movimenti di 2020, 2023 e 2024, che il motore legge gratis
+- [ ] Pulizia dello storage: 28 file duplicati, ~50 MB (`npm run pulisci-storage -- --esegui`)
+- [ ] Riconoscere un formato nuovo proponendo una scheda al modello, invece di scriverla a mano
+
 ## Fase 1 bis — Appartenenza e accesso (prima del secondo condominio)
 
 Per il nostro condominio non serve: siamo gli unici utenti e il rischio è nullo.
@@ -93,6 +113,11 @@ quel cliente per smettere di usare il suo strumento attuale, niente altro.
 3. **Ogni PR passa** `npm run lint`, `npm test`, `npm run build` in locale e in CI.
 4. **Le migrazioni non si modificano dopo essere state applicate**: se serve un
    cambiamento, si aggiunge un file nuovo. Vanno testate su staging prima.
+   *Il 20/09/2026 questa regola non è stata rispettata*: le quattro migrazioni
+   dei dati e della tabella `incassi` sono andate diritte in produzione, con un
+   backup prima e una verifica dopo, ma senza passare da staging. Lo staging è
+   stato riallineato in seguito. È il genere di scorciatoia che funziona finché
+   l'unico utente siamo noi.
 5. **Un rilascio che cambia dati ha sempre un modo per tornare indietro** scritto
    nella PR, prima del merge.
 6. **`STATO.md` si aggiorna** quando una funzionalità arriva in produzione.

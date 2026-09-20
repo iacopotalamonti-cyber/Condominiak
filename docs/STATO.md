@@ -28,6 +28,7 @@ tutto il codice (19/09/2026); non esistono più riferimenti a CondoTwin.
 | Servizio | Dove | Stato |
 | --- | --- | --- |
 | Registrazione / login | `src/app/login/`, `src/middleware.ts` | funzionante |
+| Recupero password | `src/app/login/`, `src/app/reset/` | funzionante — richiede gli indirizzi di ritorno elencati in Supabase |
 | Invito condomino via token | `src/app/invite/[token]/`, `src/app/api/invite-resident/` | funzionante |
 | Wizard di onboarding condominio | `src/app/onboarding/`, `src/components/onboarding/` | funzionante |
 | Lettura diretta dei rendiconti conosciuti | `src/lib/lettura.ts`, `src/lib/motore.ts`, `src/lib/profili.ts`, `src/lib/profilo.ts` | funzionante, tre formati, costo zero |
@@ -60,6 +61,11 @@ Migrazioni applicate, in ordine (`supabase/migrations/`):
 6. `consuntivo_e_totale_documento_separati` (applicata il 20/09/2026)
 7. `20260920130000_incassi.sql` — la tabella delle partite di singoli condomini
 8. `20260920140000_incassi_dei_sei_esercizi.sql` — le quattro righe dei sei anni
+
+Le quattro del 20/09 sono state applicate direttamente in produzione, con un
+backup prima e una verifica dopo, saltando lo staging — che è stato riallineato
+solo in seguito e ha la tabella `incassi` ma non i suoi dati. Vedi la nota al
+punto 4 di `ROADMAP.md`.
 
 Lo schema completo è in `supabase/migrations/00000000000000_schema_iniziale.sql`,
 ricostruito dal database di produzione il 19/09/2026: tabelle, indici, policy RLS
@@ -110,6 +116,13 @@ sono affatto:
 `lettura`, `motore`, `movimenti`, `profilo`, `rendiconto`, `riconciliazione`.
 Novanta test che coprono il calcolo, il parsing e la lettura dei rendiconti;
 non le pagine, non le API, non i flussi end-to-end.
+
+## Dati in archivio
+
+Un condominio, Via Enriques 3, con sei esercizi dal 2019-2020 al 2024-2025.
+Tutti letti dai documenti, tutti in quadratura al centesimo con il totale
+stampato. I movimenti (il dettaglio per fornitore) esistono solo per il
+2024-2025: 67 righe, 21 fornitori.
 
 ## Lettura dei rendiconti
 

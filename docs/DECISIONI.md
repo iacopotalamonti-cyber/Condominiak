@@ -64,10 +64,66 @@ mandare l'intero PDF come immagini a ogni analisi — 43 pagine per estrarne 9 d
 spese, con un costo per ogni rilettura e un risultato che può cambiare fra due
 letture dello stesso file.
 
-Il parser si ferma quando non riconosce un formato invece di indovinare: sul
-rendiconto dell'amministratore precedente (MULTIGEST) riconosce zero pagine e
-lo dichiara. È la proprietà che lo distingue da un modello, che un numero lo
-restituisce sempre.
+Il parser si ferma quando non riconosce un formato invece di indovinare. È la
+proprietà che lo distingue da un modello, che un numero lo restituisce sempre.
+(MULTIGEST, che quel giorno non si leggeva, è stato aggiunto il 20/09: i formati
+riconosciuti sono tre.)
+
+**20/09/2026 — I formati sono dati, non codice generato.**
+Un formato nuovo si descrive con una scheda — dove sono le colonne, come si
+riconosce una voce, dove sta il totale — che un motore solo, scritto e
+verificato una volta, esegue. Scartato: far scrivere al modello un lettore in
+codice per ogni formato nuovo, che era la strada più diretta e anche la più
+pericolosa. Una scheda dice dove guardare, non cosa fare: al peggio legge male
+dei numeri, e la quadratura contro il totale stampato se ne accorge. Codice
+generato a runtime avrebbe potuto fare qualunque cosa, e nessuno lo avrebbe
+riletto. Costo: un formato che non si lascia descrivere dalla scheda richiede di
+estendere il motore, e l'estensione va rivista da noi.
+
+**20/09/2026 — Una lettura si usa solo se quadra al centesimo.**
+Il rendiconto stampa il proprio totale: la lettura si confronta con quello. Se
+lo scarto supera un centesimo, se compare un codice che il profilo non conosce,
+o se non si capisce l'anno, la lettura si dichiara inutilizzabile e il documento
+va al modello come prima. Scartato: usare la lettura migliore disponibile e
+segnalare l'incertezza. Un numero sbagliato gratis costa più di uno giusto a
+pagamento, perché nessuno lo ricontrolla.
+
+**20/09/2026 — Un esercizio a cavallo prende l'anno in cui chiude.**
+Il rendiconto 01/08/2024 – 31/07/2025 è l'esercizio 2025. Scartato: l'anno di
+apertura. Era già sbagliato in archivio — il 2024-2025 stava sotto il 2024 — e
+sistemarlo ha richiesto di spostare tutto di uno. La regola vale ovunque:
+nell'estrazione, nel database, nei selettori d'anno.
+
+**20/09/2026 — Quello che il condominio incassa sta fuori dalle spese, in una tabella sua.**
+Il rendiconto tiene dentro il proprio totale anche le partite di singoli
+condomini: un rimborso assicurativo incassato, una spesa riaddebitata a chi
+l'ha causata. Vanno in `incassi`, e vale sempre `spese = totale stampato −
+incassi`. Scartato: sommarle alle categorie col segno che hanno — il rimborso
+di 2.500 € del 2023-2024 avrebbe reso negativa l'assicurazione e reso gli anni
+non confrontabili. Scartato anche: riscrivere il totale stampato per far
+tornare i conti. È la cifra che il condòmino ritrova sulla carta, e cambiarla
+sarebbe mentirgli.
+
+**20/09/2026 — Il fotovoltaico è una categoria a sé.**
+È un impianto del condominio con costi ricorrenti propri: assistenza, accisa,
+oneri fiscali, manutenzioni straordinarie. Finiva in "varie", e i 5.378,85 € di
+manutenzione straordinaria del 2023-2024 sparivano dentro una voce che non
+significa niente.
+
+**20/09/2026 — I movimenti di una voce si tengono solo se sommano al totale della voce.**
+Altrimenti si scartano tutti. Scartato: tenerne una parte e dichiarare la
+copertura riga per riga. Un elenco di fatture a cui ne manca una si legge come
+se fosse completo, e nessuno va a controllare quanto è completo. Conseguenza:
+sui rendiconti Tosiani il dettaglio per fornitore copre l'84% delle spese, e il
+resto sono fatture ripartite a percentuale fra più voci — la luce di un
+contatore diviso fra scale, ascensore e autorimesse — che non appartengono a
+una voce sola. La percentuale si dice, non si nasconde.
+
+**20/09/2026 — Fornitore e data si leggono solo dove il formato dà loro una colonna.**
+Nei rendiconti Tosiani il fornitore sta prima del numero di documento, e si
+isola trovando la data. Negli altri due formati no, e il campo resta vuoto:
+meglio di un nome ritagliato a occhio dalla descrizione, che sembra un dato e
+non lo è.
 
 ## Aperte
 
