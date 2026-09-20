@@ -244,3 +244,76 @@ export function totaleVoci(voci: Voce[]): number {
   const somma = voci.reduce((tot, v) => tot + (v.totale ?? 0) + (v.totaleInquilino ?? 0), 0);
   return Math.round(somma * 100) / 100;
 }
+
+// ---------------------------------------------------------------------------
+// I totali che il documento stampa
+// ---------------------------------------------------------------------------
+
+// Un rendiconto chiude l'elenco delle spese con il proprio totale generale, e
+// quel numero non va ricalcolato: va letto, e poi usato per controllare ciò che
+// si è capito. Ricostruirlo sommando le voci significa scegliere da soli cosa
+// sommare — e sbagliare, per esempio, trattando un rimborso come se fosse uno
+// storno da riaggiungere.
+//
+// Il totale generale è la somma delle spese generali dopo gli storni più le
+// spese personali, che il documento addebita a contatore invece che per
+// millesimi. Le stesse due parti si ritrovano nelle due colonne di chiusura,
+// quota del proprietario e quota del conduttore.
+
+export interface TotaliDichiarati {
+  /** "Totale Gen." in fondo all'elenco spese. */
+  generale: number | null;
+  /** Le voci P00, P01… : consumi addebitati a contatore, non per millesimi. */
+  personali: { codice: string; descrizione: string; importo: number }[];
+}
+
+const CODICE_PERSONALE = /^P\d{2}$/;
+
+export function totaliDichiarati(pagine: Pagina[]): TotaliDichiarati {
+  let generale: number | null = null;
+  const personali: TotaliDichiarati["personali"] = [];
+
+  for (const pagina of pagine) {
+    for (const riga of pagina.righe) {
+      const ordinati = riga.frammenti.slice().sort((a, b) => a.x - b.x);
+      const testo = ordinati.map((f) => f.testo.trim()).join(" ");
+
+      if (/Totale\s+Gen\./i.test(testo)) {
+        const numeri = ordinati.map((f) => importoDi(f.testo)).filter((v): v is number => v !== null);
+        if (numeri.length) generale = numeri[numeri.length - 1];
+      }
+
+      const codice = ordinati.find((f) => CODICE_PERSONALE.test(f.testo.trim()));
+      if (!codice) continue;
+      const importi = ordinati.map((f) => importoDi(f.testo)).filter((v): v is number => v !== null);
+      if (!importi.length) continue;
+
+      personali.push({
+        codice: codice.testo.trim(),
+        descrizione: ordinati
+          .filter((f) => f.x > codice.x && importoDi(f.testo) === null)
+          .map((f) => f.testo.trim())
+          .join(" "),
+        importo: importi[importi.length - 1],
+      });
+    }
+  }
+
+  return { generale, personali };
+}
+
+/**
+ * Confronta ciò che il parser ha letto con il totale che il documento dichiara.
+ *
+ * Uno scarto non è un dettaglio da nascondere: dice quanto della spesa non
+ * siamo riusciti a spiegare, in euro. È la misura più onesta che abbiamo.
+ */
+export function quadratura(voci: Voce[], totali: TotaliDichiarati) {
+  const generali = totaleVoci(voci);
+  const personali = totali.personali.reduce((somma, p) => somma + p.importo, 0);
+  const ricostruito = Math.round((generali + personali) * 100) / 100;
+  const scarto =
+    totali.generale === null ? null : Math.round((ricostruito - totali.generale) * 100) / 100;
+
+  return { generali, personali: Math.round(personali * 100) / 100, ricostruito, scarto };
+}

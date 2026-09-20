@@ -8,7 +8,15 @@
 import { readFile } from "node:fs/promises";
 import { getDocumentProxy } from "unpdf";
 
-import { leggiVoci, totaleVoci, type Frammento, type Pagina, type Riga } from "../src/lib/rendiconto.ts";
+import {
+  leggiVoci,
+  quadratura,
+  totaliDichiarati,
+  totaleVoci,
+  type Frammento,
+  type Pagina,
+  type Riga,
+} from "../src/lib/rendiconto.ts";
 
 // Frammenti sulla stessa riga hanno la stessa y a meno di un'inezia: i caratteri
 // di una riga non sono allineati al punto.
@@ -69,3 +77,13 @@ const senzaTotale = voci.filter((v) => v.totale === null && v.totaleInquilino ==
 console.log(`\n${voci.length} voci lette, ${senzaTotale.length} senza totale.`);
 console.log(`Somma delle voci: ${eur(totaleVoci(voci))}`);
 console.log(`Totali di tabella trovati: ${tabelle.length}`);
+
+const totali = totaliDichiarati(pagine);
+const q = quadratura(voci, totali);
+
+console.log("\n--- quadratura ---");
+console.log(`voci generali, storni compresi   ${eur(q.generali).padStart(12)}`);
+console.log(`spese personali (a contatore)    ${eur(q.personali).padStart(12)}`);
+console.log(`ricostruito                      ${eur(q.ricostruito).padStart(12)}`);
+console.log(`Totale Gen. stampato             ${eur(totali.generale).padStart(12)}`);
+console.log(`scarto                           ${q.scarto === null ? "—" : eur(q.scarto).padStart(12)}`);
