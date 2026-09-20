@@ -124,3 +124,60 @@ test("le pagine senza la tabella delle spese vengono saltate", () => {
   assert.equal(voci.length, 0);
   assert.deepEqual(pagineLette, []);
 });
+
+test("una voce che scavalca il salto pagina resta una voce sola", () => {
+  // Il rendiconto la ristampa con lo stesso codice sulla pagina dopo, e solo
+  // lì stampa il totale: contarle due volte conterebbe due volte la spesa.
+  const pagine: Pagina[] = [
+    {
+      numero: 8,
+      righe: [
+        riga(671, INTESTAZIONE),
+        riga(300, [
+          { x: 38, xFine: 58, testo: "007.001" },
+          { x: 72, xFine: 200, testo: "Manutenzioni impianti antincendio" },
+        ]),
+      ],
+    },
+    {
+      numero: 9,
+      righe: [
+        riga(671, INTESTAZIONE),
+        riga(600, [
+          { x: 38, xFine: 58, testo: "007.001" },
+          { x: 72, xFine: 200, testo: "Manutenzioni impianti antincendio" },
+        ]),
+        riga(580, [{ x: 481, xFine: 511, testo: "986,96" }]),
+      ],
+    },
+  ];
+
+  const { voci } = leggiVoci(pagine);
+  assert.equal(voci.length, 1);
+  assert.equal(voci[0].totaleInquilino, 986.96);
+  // La voce vive dove si chiude: è lì che si ritrova il totale nel documento.
+  assert.equal(voci[0].pagina, 9);
+});
+
+test("due voci con lo stesso codice ma entrambe con un totale restano due", () => {
+  const pagina: Pagina = {
+    numero: 9,
+    righe: [
+      riga(671, INTESTAZIONE),
+      riga(600, [
+        { x: 38, xFine: 58, testo: "100.003" },
+        { x: 72, xFine: 200, testo: "Conduzione centrale" },
+        { x: 481, xFine: 511, testo: "269,50" },
+      ]),
+      riga(560, [
+        { x: 38, xFine: 58, testo: "100.003" },
+        { x: 72, xFine: 200, testo: "Conduzione centrale" },
+        { x: 481, xFine: 511, testo: "2.213,03" },
+      ]),
+    ],
+  };
+
+  const { voci } = leggiVoci([pagina]);
+  assert.equal(voci.length, 2);
+  assert.equal(totaleVoci(voci), 2482.53);
+});

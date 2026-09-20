@@ -179,8 +179,26 @@ export function leggiVoci(pagine: Pagina[]): LetturaRendiconto {
           .join(" ")
           .trim();
 
+        const nuovo = codice.testo.trim();
+        const precedente = voci[voci.length - 1];
+
+        // Una voce i cui movimenti scavalcano il salto pagina viene ristampata
+        // con lo stesso codice sulla pagina dopo, e il totale compare solo lì.
+        // Sono la stessa voce: contarle due volte significherebbe contare due
+        // volte anche la spesa.
+        const continuazione =
+          precedente?.codice === nuovo &&
+          precedente.totale === null &&
+          precedente.totaleInquilino === null;
+
+        if (continuazione) {
+          precedente.pagina = pagina.numero;
+          corrente = precedente;
+          continue;
+        }
+
         corrente = {
-          codice: codice.testo.trim(),
+          codice: nuovo,
           descrizione,
           totale: null,
           totaleInquilino: null,
