@@ -50,9 +50,59 @@ l'app rispondeva con numeri che non tornavano con la carta.
 - [x] Tabella `incassi` e sezione dedicata in Analisi spese
 - [x] Sei esercizi (2020-2025) riscritti in produzione dai documenti, scarto 0,00
 - [x] Recupero password (`/reset`): prima si rientrava solo dalla console di Supabase
+- [x] Lettore del riparto per unità (`src/lib/riparto.ts`): nove tabelle
+      millesimali, scarto 0,00 su tutte e tre i rendiconti Tosiani
+- [ ] Salvare le quote lette e mostrarle nella vista appartamento, al posto
+      della divisione millesimi/totale — che sbaglia da -34% a +59%
+- [ ] Le 30 unità mancanti in anagrafica: box, cantine e posti auto pagano
+      1.357,80 € dei 27.748,85 del 2024-2025, e l'app non sa che esistono
 - [ ] Caricare i movimenti di 2020, 2023 e 2024, che il motore legge gratis
 - [ ] Pulizia dello storage: 28 file duplicati, ~50 MB (`npm run pulisci-storage -- --esegui`)
 - [ ] Riconoscere un formato nuovo proponendo una scheda al modello, invece di scriverla a mano
+
+## Chiesto il 23/09/2026 — da fare
+
+### 1. Provare il giro completo dei consuntivi
+
+Oggi i sei esercizi in archivio li ha scritti una migrazione, non l'applicazione.
+Non sappiamo se il percorso normale — cancella, ricarica il PDF, salva —
+produce gli stessi numeri. È la prova che manca.
+
+- [ ] Cancellare i consuntivi e ricaricarli dall'interfaccia, confrontando il
+      risultato con quello di oggi, voce per voce
+- [ ] Fare la prova **prima su staging**, o comunque con un backup fresco: se il
+      giro non riproduce i numeri, senza copia li abbiamo persi
+- [ ] Prima ancora, sistemare il vincolo che la rende parziale: **tre esercizi su
+      sei non hanno il PDF in archivio** (2020, 2021 e 2023 hanno
+      `documento_path` nullo, perché furono letti fuori dall'applicazione).
+      Vanno ricaricati, altrimenti la prova copre solo 2022, 2024 e 2025
+- [ ] Il confronto va fatto da un test, non a occhio: due letture dello stesso
+      documento devono dare lo stesso risultato, e questo è esattamente ciò che
+      un motore deterministico permette di verificare
+
+### 2. La pagina che vende il prodotto
+
+- [ ] Pagina pubblica su `condominiak.me`: cosa fa, per chi, cosa costa
+- [ ] Le quattro frasi di `SERVIZI.md` sono già il contenuto — "ora ho capito
+      quanto spendiamo all'anno", "quanto paghiamo un fornitore", "cosa devo
+      chiedere in assemblea", "quanto spendo per l'acqua"
+- [ ] Il prezzo non è ancora deciso (Fase 3): la pagina può esistere prima, ma
+      senza cifra o con una richiesta di contatto
+
+### 3. Rifare la dashboard
+
+- [ ] **Togliere la tabella dei pagamenti.** Non ha senso in un prodotto in cui
+      il cliente è il condominio e non l'amministratore: i pagamenti li conosce
+      chi incassa. Tocca `src/components/dashboard/PaymentGrid.tsx`, la query e
+      gli avvisi di morosità in `src/app/dashboard/page.tsx`, la vista
+      appartamento, `calcolaMorosita`/`percentualeMorosita` in `calcoli.ts` e il
+      punteggio `scoreEdificio`, che oggi pesa la morosità: va ricalcolato sui
+      soli impianti o su qualcos'altro
+- [ ] **Mettere una bacheca**: ogni condòmino scrive quando si rompe qualcosa, e
+      lo etichetta come segnalazione. Tabella nuova, con RLS per condominio
+- [ ] Nota di sequenza: **la bacheca è inutile finché l'invito non collega
+      nessuno** (oggi 0 unità su 14 hanno un utente). Prima la Fase 1 bis, o la
+      bacheca la vedrai scrivere solo tu
 
 ## Fase 1 bis — Appartenenza e accesso (prima del secondo condominio)
 
