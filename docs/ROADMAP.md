@@ -115,6 +115,47 @@ produce gli stessi numeri. È la prova che manca.
       nessuno** (oggi 0 unità su 14 hanno un utente). Prima la Fase 1 bis, o la
       bacheca la vedrai scrivere solo tu
 
+## Per reggere centinaia di condomini (verificato il 23/09/2026)
+
+I volumi non sono il problema: un condominio produce circa 130 righe l'anno fra
+quote, spese e movimenti, e trecento condomini per dieci anni sono 400.000
+righe — poche, per Postgres. Il problema sono alcune assunzioni da un
+condominio solo, e i PDF. In ordine di urgenza:
+
+- [ ] **Permessi espliciti sulle tabelle** (`20260923120000_permessi_espliciti.sql`):
+      dal 30/10/2026 Supabase non li concede più alle tabelle nuove, e senza di
+      loro le nostre migrazioni ricostruiscono un database che l'app non legge.
+      Applicata e verificata su staging; da applicare in produzione. Toglie anche
+      ad anon i permessi che aveva su tutto
+- [ ] **Una persona, più unità; un proprietario, più condomini.**
+      `getDashboardContext` legge condominio e unità con `.maybeSingle()`: con due
+      righe fallisce e rimanda all'onboarding. È l'assunzione più grave, perché il
+      prodotto la contraddice per definizione. Si risolve con la tabella `membri`
+      della Fase 1 bis
+- [ ] **Indici sulle colonne che la RLS legge a ogni riga**: `condominiums.owner_id`
+      e `unita.user_id` non ne hanno, e ogni policy le interroga
+- [ ] **RLS che ricalcola l'utente a ogni riga** (21 policy): `auth.uid()` va
+      scritto `(select auth.uid())`, così si valuta una volta per query. Due
+      policy permissive per tabella (amministratore e condomino) si possono
+      fondere in una. Correzione meccanica, segnalata dall'advisor di Supabase
+- [ ] **Le migrazioni di dati assumono un condominio solo**: usano
+      `select id from condominiums limit 1`. Sono già state eseguite, ma stanno
+      nella storia che si ripete in un ripristino: su un database con più
+      condomini scriverebbero i dati di Via Enriques nel primo che capita.
+      Vanno ancorate all'id del condominio
+- [ ] **I documenti in archivio sono per utente, non per condominio**
+      (`documenti/{user_id}/…`): con più persone nello stesso condominio, uno
+      non vede i PDF caricati dall'altro
+- [ ] **I PDF sono il vero volume**: 3-8 MB a rendiconto. Il piano gratuito ha
+      1 GB di storage; trecento condomini con dieci anni di storico sono decine
+      di GB. Serve il piano Pro prima dei primi venti condomini con storico
+- [ ] **Il collo di bottiglia del prodotto sono i formati, non i dati**: centinaia
+      di condomini vuol dire decine di amministratori, cioè decine di formati.
+      Oggi ogni formato nuovo è una scheda scritta a mano. La scheda proposta dal
+      modello, e verificata dalla quadratura, è ciò che rende la cosa scalabile
+- [ ] Protezione contro le password compromesse disattivata in Supabase Auth
+      (un interruttore, segnalato dall'advisor di sicurezza)
+
 ## Fase 1 bis — Appartenenza e accesso (prima del secondo condominio)
 
 Per il nostro condominio non serve: siamo gli unici utenti e il rischio è nullo.
@@ -184,3 +225,9 @@ quel cliente per smettere di usare il suo strumento attuale, niente altro.
 6. **`STATO.md` si aggiorna** quando una funzionalità arriva in produzione.
 7. **Le scelte con alternative vere finiscono in `DECISIONI.md`**, con la data e
    il perché: fra sei mesi nessuno dei due si ricorderà.
+8. **Ogni migrazione che crea una tabella concede i suoi permessi**, nello stesso
+   file: `grant select, insert, update, delete` ad `authenticated`, `grant all` a
+   `service_role`, niente ad `anon` salvo una ragione scritta. Dal 30/10/2026
+   Supabase non lo fa più da solo, e una tabella senza permessi è invisibile
+   all'app. Mai `alter default privileges`: una tabella nuova senza RLS
+   diventerebbe leggibile da chiunque abbia fatto l'accesso.

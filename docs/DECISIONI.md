@@ -160,6 +160,14 @@ passava. Ora ogni numero della riga dei totali deve trovare la sua colonna, o
 la lettura si dichiara sbagliata. È una regola generale: un controllo che
 guarda solo ciò che ha capito non si accorge mai di ciò che gli è sfuggito.
 
+**23/09/2026 — Nessun permesso ad anon sulle tabelle.**
+Supabase concedeva tutto a tutti, anche a chi ha solo la chiave pubblica, e
+lasciava alla RLS il compito di fermarlo. L'applicazione non legge mai una
+tabella senza un utente autenticato, quindi anon non ha bisogno di niente.
+Scartato: seguire il modello suggerito da Supabase, che concede a anon la
+lettura. Con la RLS scritta bene non cambierebbe nulla; con una policy scritta
+male, la differenza è fra un errore e i dati di un condominio su internet.
+
 ## Aperte
 
 **Cosa vede un condòmino che non è consigliere**, e come trattiamo i dati
