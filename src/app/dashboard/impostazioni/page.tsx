@@ -15,6 +15,9 @@ export default async function ImpostazioniPage() {
     .from("unita")
     .select("*")
     .eq("condominium_id", condominium.id)
+    // Si invitano le persone, e le persone abitano negli appartamenti: box,
+    // cantine e posti auto sono nell'anagrafica per il riparto, non qui.
+    .eq("tipologia", "appartamento")
     .order("interno");
 
   const unita = (data ?? []) as Unita[];
@@ -65,7 +68,7 @@ export default async function ImpostazioniPage() {
                   </TableCell>
                   <TableCell>
                     {!u.user_id && (
-                      <InviteResidentButton unitaId={u.id} interno={u.interno} currentEmail={u.email} />
+                      <InviteResidentButton unitaId={u.id} interno={u.interno ?? 0} currentEmail={u.email} />
                     )}
                   </TableCell>
                 </TableRow>

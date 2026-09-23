@@ -61,6 +61,8 @@ export interface QuotaUnita {
   codice: string;
   /** "Appartamento", "Box", "Cantina", "Posto auto". */
   tipologia: string;
+  /** Il subalterno catastale, stampato davanti alla tipologia ("42 Appartamento"). */
+  sub: string;
   nome: string;
   /** Quanto paga, colonna per colonna. */
   importi: Record<string, number>;
@@ -77,6 +79,12 @@ export interface Riparto {
   totaliDichiarati: Record<string, number>;
   /** Somma di quanto letto meno i totali dichiarati, colonna per colonna. */
   scarti: Record<string, number>;
+  /**
+   * Importi della riga dei totali che non stanno sotto nessuna colonna
+   * riconosciuta. Se ce ne sono, una colonna è sfuggita alla lettura — e con
+   * lei le quote che porta — anche se ogni colonna letta torna.
+   */
+  totaliSenzaColonna: number[];
   quadra: boolean;
 }
 
@@ -123,8 +131,16 @@ export function colonneDi(pagina: Pagina): ColonnaRiparto[] | null {
   );
   if (indice < 0) return null;
 
-  const colonne: ColonnaRiparto[] = ordinati(righe[indice])
-    .filter((f) => INTESTAZIONE.test(f.testo.trim()))
+  // Le parole note servono solo a trovare la riga d'intestazione e il punto
+  // in cui cominciano le colonne. Le colonne sono tutto ciò che sta da lì a
+  // destra, qualunque parola le apra: il 2023-2024 ha una decima colonna,
+  // "Consumi Enel Box/Cantine", e un elenco di parole note l'aveva persa.
+  const intestazione = ordinati(righe[indice]);
+  const inizio = Math.min(
+    ...intestazione.filter((f) => INTESTAZIONE.test(f.testo.trim())).map((f) => f.x)
+  );
+  const colonne: ColonnaRiparto[] = intestazione
+    .filter((f) => f.x >= inizio - 5 && f.testo.trim())
     .map((f) => ({ nome: f.testo.trim(), xFine: f.xFine }));
 
   // Le due righe sotto completano il nome: si attribuisce ogni pezzo alla
@@ -164,6 +180,7 @@ export function leggiRiparto(pagine: Pagina[]): Riparto | null {
   let colonne: ColonnaRiparto[] | null = null;
   const perCodice = new Map<string, QuotaUnita>();
   const totaliDichiarati: Record<string, number> = {};
+  const totaliSenzaColonna: number[] = [];
 
   for (const pagina of pagine) {
     const colonnePagina = colonneDi(pagina);
@@ -183,7 +200,14 @@ export function leggiRiparto(pagine: Pagina[]): Riparto | null {
         .filter((v): v is { valore: number; colonna: string } => v.valore !== null && v.colonna !== null);
 
       if (/^Totali\s+Condominio/i.test(linea)) {
-        for (const { valore, colonna } of importi) {
+        for (const frammento of frammenti) {
+          const valore = importoDi(frammento.testo);
+          if (valore === null) continue;
+          const colonna = colonnaDi(frammento.xFine, colonnePagina);
+          if (colonna === null) {
+            totaliSenzaColonna.push(valore);
+            continue;
+          }
           totaliDichiarati[colonna] = arrotonda((totaliDichiarati[colonna] ?? 0) + valore);
         }
         continue;
@@ -215,6 +239,7 @@ export function leggiRiparto(pagine: Pagina[]): Riparto | null {
         corrente = perCodice.get(codice) ?? {
           codice,
           tipologia: "",
+          sub: "",
           nome: "",
           importi: {},
           millesimi: {},
@@ -239,6 +264,7 @@ export function leggiRiparto(pagine: Pagina[]): Riparto | null {
         .map((f) => f.testo.trim());
       const tipologia = testuali.find((t) => /appartamento|box|cantina|posto auto|negozio|ufficio/i.test(t));
       if (tipologia && !unita.tipologia) {
+        unita.sub = tipologia.match(/^(\d+)/)?.[1] ?? "";
         unita.tipologia = tipologia.replace(/^\d+\s*/, "").trim();
         unita.nome = testuali.filter((t) => t !== tipologia && !/^(Pro|Inq)$/.test(t)).join(" ").trim();
       }
@@ -268,8 +294,15 @@ export function leggiRiparto(pagine: Pagina[]): Riparto | null {
     unita,
     totaliDichiarati,
     scarti,
-    // Un centesimo per colonna: il documento stampa una riga di
-    // arrotondamento, e sotto quella soglia non c'è niente da spiegare.
-    quadra: Object.values(scarti).every((s) => Math.abs(s) <= 0.02),
+    totaliSenzaColonna,
+    // Due centesimi per colonna: il documento stampa una riga di
+    // arrotondamento, e sotto quella soglia non c'è niente da spiegare. Ma
+    // anche una riga di totali letta per intero: un importo senza colonna
+    // vuol dire una colonna persa, e le colonne lette non possono accorgersene.
+    // Senza totali stampati, poi, non c'è niente con cui verificare.
+    quadra:
+      Object.keys(totaliDichiarati).length > 0 &&
+      totaliSenzaColonna.length === 0 &&
+      Object.values(scarti).every((s) => Math.abs(s) <= 0.02),
   };
 }

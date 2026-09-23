@@ -72,6 +72,7 @@ test("ogni importo di un'unità finisce nella colonna della sua intestazione", (
   const unita = riparto.unita[0];
   assert.equal(unita.codice, "009");
   assert.equal(unita.tipologia, "Appartamento");
+  assert.equal(unita.sub, "42");
   assert.equal(unita.nome, "Talamonti - Cappella");
   assert.equal(unita.importi["Millesimi Generali"], 441.86);
   assert.equal(unita.importi["Spese Riscaldamento"], 873.65);
@@ -154,4 +155,51 @@ test("la lettura si verifica contro i totali stampati dal documento", () => {
   assert.ok(monco);
   assert.equal(monco.quadra, false);
   assert.equal(monco.scarti["Millesimi Generali"], -500);
+});
+
+test("una colonna si riconosce anche se la sua prima parola è nuova", () => {
+  // Il 2023-2024 ha una decima colonna, "Consumi Enel Box/Cantine". Un elenco
+  // di parole note l'aveva persa, e con lei 60,11 € di quote.
+  const conConsumi: Pagina = {
+    numero: 21,
+    righe: [
+      riga(700, [
+        [19, 39, "Codice"],
+        [268, 294, "Millesimi"],
+        [309, 335, "Millesimi"],
+        [579, 597, "Spese"],
+        [652, 678, "Consumi"],
+      ]),
+      riga(690, [[658, 671, "Enel"]]),
+    ],
+  };
+  const colonne = colonneDi(conConsumi);
+  assert.ok(colonne);
+  assert.equal(colonne.length, 4);
+  assert.equal(colonne[3].nome, "Consumi Enel");
+});
+
+test("un totale che non trova colonna fa fallire la quadratura", () => {
+  // Il difetto vero: una colonna non riconosciuta spariva sia dalle quote sia
+  // dai totali, e il controllo diceva "quadra" su ciò che era rimasto.
+  const conTotaleOrfano = [
+    ...UNA_UNITA,
+    riga(600, [
+      [15, 100, "Totali Condominio"],
+      [279, 300, "441,86"],
+      [320, 341, "464,93"],
+      [594, 615, "873,65"],
+      [700, 720, "60,11"],
+    ]),
+  ];
+  const riparto = leggiRiparto([pagina(conTotaleOrfano)]);
+  assert.ok(riparto);
+  assert.deepEqual(riparto.totaliSenzaColonna, [60.11]);
+  assert.equal(riparto.quadra, false);
+});
+
+test("senza una riga di totali non si può dire che quadri", () => {
+  const riparto = leggiRiparto([pagina(UNA_UNITA)]);
+  assert.ok(riparto);
+  assert.equal(riparto.quadra, false);
 });

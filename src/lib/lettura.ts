@@ -17,6 +17,7 @@ import { getDocumentProxy } from "unpdf";
 import { leggi, riconosci, testoRiga, type Lettura } from "./motore.ts";
 import { PROFILI } from "./profili.ts";
 import { classifica, mappaturaPer, type Classificazione } from "./profilo.ts";
+import { leggiRiparto, type Riparto } from "./riparto.ts";
 import type { Frammento, Pagina, Riga } from "./rendiconto.ts";
 import type { CategoriaSpesa, ExtractedBilancio, ExtractedMovimento, Fonte } from "./types.ts";
 
@@ -116,6 +117,12 @@ export interface RendicontoLetto {
    * perché lì la riga della fattura non appartiene a una voce sola.
    */
   coperturaMovimenti: number;
+  /**
+   * Il riparto per unità, quando il documento ne ha uno leggibile. Si tiene
+   * anche se non quadra, per poterlo dire; a salvare ci pensa `estrazioneDa`,
+   * che usa solo quello che torna.
+   */
+  riparto: Riparto | null;
   /** Perché questa lettura non è utilizzabile, o null se lo è. */
   motivo: string | null;
 }
@@ -155,6 +162,7 @@ export function leggiRendiconto(pagine: Pagina[]): RendicontoLetto | null {
     lettura,
     classificazione,
     coperturaMovimenti: spese ? conMovimenti / spese : 0,
+    riparto: leggiRiparto(pagine),
     motivo: motivoDiScarto(lettura, classificazione, anno, Boolean(mappatura)),
   };
 }
@@ -274,6 +282,22 @@ export function estrazioneDa(letto: RendicontoLetto, documento: string): Extract
     })),
     fonti,
     conflitti: {},
+    // Il riparto si salva solo se ogni sua colonna torna con il totale che il
+    // documento stampa: una quota sbagliata sull'appartamento di qualcuno è
+    // l'errore che fa più danno, perché è l'unico numero che guarda.
+    quote:
+      letto.riparto?.quadra
+        ? letto.riparto.unita.map((u) => ({
+            codice: u.codice,
+            tipologia: u.tipologia,
+            sub: u.sub,
+            nome: u.nome,
+            importi: u.importi,
+            millesimi: u.millesimi,
+            totale: u.totale,
+            pagina: u.pagina,
+          }))
+        : [],
   };
 }
 
@@ -324,6 +348,18 @@ export function notaDiLettura(letto: RendicontoLetto): string {
         `partite di singoli condomini (${descrizioni}), che restano fuori dalle spese comuni: ` +
         `spese comuni ${euro(classificazione.totaleSpese)}.`
     );
+  }
+
+  if (letto.riparto?.quadra) {
+    parti.push(
+      `Riparto letto per ${letto.riparto.unita.length} unità, in quadratura con i totali stampati.`
+    );
+  } else if (letto.riparto) {
+    const scarti = Object.entries(letto.riparto.scarti)
+      .filter(([, s]) => Math.abs(s) > 0.02)
+      .map(([colonna, s]) => `${colonna} ${euro(s)}`)
+      .join(", ");
+    parti.push(`Il riparto per unità non torna con i totali stampati (${scarti}): non è stato salvato.`);
   }
 
   const copertura = Math.round(letto.coperturaMovimenti * 100);

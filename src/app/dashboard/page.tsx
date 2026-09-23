@@ -23,7 +23,12 @@ export default async function DashboardPage() {
 
   const [{ data: unita }, { data: pagamenti }, { data: impianti }, { data: bilanci }, { data: spese }] =
     await Promise.all([
-      supabase.from("unita").select("*").eq("condominium_id", condominium.id).order("interno"),
+      supabase
+        .from("unita")
+        .select("*")
+        .eq("condominium_id", condominium.id)
+        .eq("tipologia", "appartamento")
+        .order("interno"),
       supabase.from("pagamenti").select("*").eq("condominium_id", condominium.id).eq("anno", annoCorrente),
       supabase.from("impianti").select("*").eq("condominium_id", condominium.id),
       supabase.from("bilanci").select("*").eq("condominium_id", condominium.id),

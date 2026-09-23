@@ -168,6 +168,7 @@ export function AggiungiBilancio({
           fonti: bilancio.fonti,
           movimenti: bilancio.movimenti,
           incassi: bilancio.incassi,
+          quote: bilancio.quote,
           documentoPath: documenti[0]?.path ?? null,
         }),
       });

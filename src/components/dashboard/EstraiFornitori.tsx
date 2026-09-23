@@ -80,6 +80,7 @@ export function EstraiFornitori({
           fonti: bilancio.fonti,
           movimenti: bilancio.movimenti,
           incassi: bilancio.incassi,
+          quote: bilancio.quote,
           documentoPath: risultato.documenti[0]?.path ?? doc.path,
         }),
       });
