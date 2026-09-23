@@ -146,9 +146,11 @@ condominio solo, e i PDF. In ordine di urgenza:
 - [ ] **I documenti in archivio sono per utente, non per condominio**
       (`documenti/{user_id}/…`): con più persone nello stesso condominio, uno
       non vede i PDF caricati dall'altro
-- [ ] **I PDF sono il vero volume**: 3-8 MB a rendiconto. Il piano gratuito ha
-      1 GB di storage; trecento condomini con dieci anni di storico sono decine
-      di GB. Serve il piano Pro prima dei primi venti condomini con storico
+- [ ] **I PDF sono il vero volume**: i rendiconti di Via Enriques pesano da 0,6 a
+      2,3 MB, in media 1,4. Con tre documenti l'anno (consuntivo, preventivo,
+      verbale) il piano gratuito — 1 GB di storage — basta per una ventina di
+      condomini con dieci anni di storico; trecento condomini sono circa 13 GB.
+      Serve il piano Pro prima di quella soglia
 - [ ] **Il collo di bottiglia del prodotto sono i formati, non i dati**: centinaia
       di condomini vuol dire decine di amministratori, cioè decine di formati.
       Oggi ogni formato nuovo è una scheda scritta a mano. La scheda proposta dal
