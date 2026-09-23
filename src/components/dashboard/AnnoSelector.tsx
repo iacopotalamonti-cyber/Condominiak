@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -22,12 +22,18 @@ export function AnnoSelector({
   opzioneTutti,
 }: AnnoSelectorProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Gli altri parametri restano: sulla pagina appartamento c'è anche l'unità
+  // scelta, e cambiare anno riportava l'amministratore al primo appartamento.
+  function cambia(anno: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("anno", anno);
+    router.push(`${base}?${params.toString()}`);
+  }
 
   return (
-    <Select
-      value={String(selezionato)}
-      onValueChange={(anno) => router.push(`${base}?anno=${anno}`)}
-    >
+    <Select value={String(selezionato)} onValueChange={cambia}>
       <SelectTrigger className="w-32">
         <SelectValue placeholder="Anno" />
       </SelectTrigger>

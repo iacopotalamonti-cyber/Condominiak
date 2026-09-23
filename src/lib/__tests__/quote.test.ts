@@ -162,3 +162,25 @@ test("le pertinenze sono le unità dello stesso nome nello stesso rendiconto", (
   const trovate = pertinenzeDi(APPARTAMENTO_9, [APPARTAMENTO_9, cantina, altroAnno, altroNome, altroAppartamento]);
   assert.deepEqual(trovate.map((q) => q.id), ["q33"]);
 });
+
+test("una voce a credito riduce la quota invece di sparire", () => {
+  // Il 2023-2024 dell'appartamento 9: il rimborso assicurativo del
+  // condominio torna ai condomini come una voce negativa sui millesimi
+  // generali parziali.
+  const s = scomponiQuota({
+    importi: {
+      "Millesimi Generali": 372.18,
+      "Millesimi Generali Parziali": -188.77,
+      "Millesimi Scale e Ascensore": 489.85,
+      "Millesimi Generali Fotovoltaico": 426.93,
+      "Millesimi Gen. NO Posti Auto": 126.35,
+      "Spese Riscaldamento": 654.49,
+      "Spese Raffr. - ACS - AFS": 443.13,
+    },
+    millesimi: { "Millesimi Generali Parziali": 68.601 },
+  });
+
+  assert.equal(s.totale, 2324.16);
+  const credito = s.perMillesimi.find((v) => v.nome === "Generali Parziali");
+  assert.deepEqual(credito, { nome: "Generali Parziali", importo: -188.77, millesimi: 68.601 });
+});
