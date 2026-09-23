@@ -1,4 +1,4 @@
-# Stato del progetto — aggiornato al 20/09/2026
+# Stato del progetto — aggiornato al 23/09/2026
 
 Mappa di quello che esiste **davvero nel codice** oggi. Serve a non rispiegare
 il progetto da capo a ogni sessione, e a distinguere ciò che è fatto da ciò che
@@ -42,13 +42,14 @@ tutto il codice (19/09/2026); non esistono più riferimenti a CondoTwin.
 | Anagrafica fornitori + movimenti | `src/app/dashboard/fornitori/`, `src/lib/fornitori.ts` | funzionante |
 | Archivio documenti | `src/app/dashboard/documenti/` | funzionante |
 | Impianti (anagrafica + scadenze) | `src/app/dashboard/impianti/` | funzionante |
-| Vista condomino (il suo appartamento) | `src/app/dashboard/appartamento/` | funzionante |
+| Vista condomino (il suo appartamento) | `src/app/dashboard/appartamento/` | funzionante — la quota viene dal riparto letto, non da una divisione per millesimi |
+| Lettura del riparto per unità | `src/lib/riparto.ts`, `src/lib/quote.ts` | funzionante sui rendiconti Tosiani |
 | Impostazioni condominio | `src/app/dashboard/impostazioni/` | funzionante |
 
 ## Modello dati (tabelle Supabase)
 
-`condominiums`, `unita`, `bilanci`, `spese`, `incassi`, `movimenti`, `fornitori`,
-`impianti`, `pagamenti`, `documenti`. Definizioni TypeScript in `src/lib/types.ts`.
+`condominiums`, `unita`, `bilanci`, `spese`, `incassi`, `quote_unita`, `movimenti`,
+`fornitori`, `impianti`, `pagamenti`, `documenti`. Definizioni TypeScript in `src/lib/types.ts`.
 
 Migrazioni applicate, in ordine (`supabase/migrations/`):
 
@@ -61,6 +62,12 @@ Migrazioni applicate, in ordine (`supabase/migrations/`):
 6. `consuntivo_e_totale_documento_separati` (applicata il 20/09/2026)
 7. `20260920130000_incassi.sql` — la tabella delle partite di singoli condomini
 8. `20260920140000_incassi_dei_sei_esercizi.sql` — le quattro righe dei sei anni
+
+9. `20260923100000_quote_dal_riparto.sql` — anagrafica completa (tipologia,
+   codice, subalterno) e tabella `quote_unita`. Provata su staging prima
+10. `20260923110000_quote_tre_esercizi.sql` — le 30 unità mancanti e le quote di
+    2023, 2024, 2025. Il modo esatto di tornare indietro è in
+    `supabase/rollback/`
 
 Le quattro del 20/09 sono state applicate direttamente in produzione, con un
 backup prima e una verifica dopo, saltando lo staging — che è stato riallineato
@@ -112,9 +119,9 @@ sono affatto:
 
 ## Test presenti
 
-`npm test` — otto file in `src/lib/__tests__/`: `anthropic`, `bilancio`,
-`lettura`, `motore`, `movimenti`, `profilo`, `rendiconto`, `riconciliazione`.
-Novanta test che coprono il calcolo, il parsing e la lettura dei rendiconti;
+`npm test` — dieci file in `src/lib/__tests__/`: `anthropic`, `bilancio`,
+`lettura`, `motore`, `movimenti`, `profilo`, `quote`, `rendiconto`, `riparto`,
+`riconciliazione`. Centosette test che coprono il calcolo, il parsing e la lettura dei rendiconti;
 non le pagine, non le API, non i flussi end-to-end.
 
 ## Dati in archivio
@@ -123,6 +130,11 @@ Un condominio, Via Enriques 3, con sei esercizi dal 2019-2020 al 2024-2025.
 Tutti letti dai documenti, tutti in quadratura al centesimo con il totale
 stampato. I movimenti (il dettaglio per fornitore) esistono solo per il
 2024-2025: 67 righe, 21 fornitori.
+
+Anagrafica di 44 unità — 14 appartamenti, 12 box, 13 cantine, 5 posti auto — con
+millesimi generali che sommano 1000,000. Quote per unità lette dal riparto per
+2023, 2024 e 2025: 132 righe, ogni esercizio in quadratura con la riga "Totali
+Condominio" del proprio rendiconto.
 
 ## Lettura dei rendiconti
 

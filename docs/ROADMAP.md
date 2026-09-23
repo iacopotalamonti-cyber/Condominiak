@@ -31,6 +31,12 @@ ogni rilascio successivo.
       La stringa deve essere quella del **Session pooler**: la connessione
       diretta risponde solo su IPv6 e i runner di GitHub non la raggiungono
 - [ ] Provare un ripristino su staging: un backup non provato non è un backup
+- [ ] **Il backup dipende da un'immagine Docker da scaricare ogni volta.** Il
+      23/09/2026 il registro di GitHub l'ha rifiutata due volte di fila per
+      troppe richieste, e il backup lanciato a mano non è mai partito. I notturni
+      sono riusciti, ma è un caso: `supabase db dump` scarica l'immagine di
+      Postgres a ogni esecuzione. Va sostituito con `pg_dump` installato sul
+      runner, senza Docker
 
 **Fatto quando**: posso rompere il `main` e accorgermene dalla CI invece che da un cliente.
 
@@ -52,10 +58,15 @@ l'app rispondeva con numeri che non tornavano con la carta.
 - [x] Recupero password (`/reset`): prima si rientrava solo dalla console di Supabase
 - [x] Lettore del riparto per unità (`src/lib/riparto.ts`): nove tabelle
       millesimali, scarto 0,00 su tutte e tre i rendiconti Tosiani
-- [ ] Salvare le quote lette e mostrarle nella vista appartamento, al posto
-      della divisione millesimi/totale — che sbaglia da -34% a +59%
-- [ ] Le 30 unità mancanti in anagrafica: box, cantine e posti auto pagano
-      1.357,80 € dei 27.748,85 del 2024-2025, e l'app non sa che esistono
+- [x] Quote per unità salvate (`quote_unita`) e mostrate nella vista
+      appartamento, al posto della divisione millesimi/totale che sbagliava da
+      -34% a +59%. Tre esercizi in archivio, 132 quote, tutte in quadratura
+- [x] Le 30 unità mancanti in anagrafica: box, cantine e posti auto. I millesimi
+      generali ora sommano 1000,000
+- [ ] Per il 2020, 2021 e 2022 il riparto non si legge ancora: sono gli altri
+      due formati (Contavalli, MULTIGEST), che lo stampano diversamente
+- [ ] Collegare una persona a più unità (appartamento, box, cantina) senza
+      passare dal nome: è la tabella `membri` della Fase 1 bis
 - [ ] Caricare i movimenti di 2020, 2023 e 2024, che il motore legge gratis
 - [ ] Pulizia dello storage: 28 file duplicati, ~50 MB (`npm run pulisci-storage -- --esegui`)
 - [ ] Riconoscere un formato nuovo proponendo una scheda al modello, invece di scriverla a mano

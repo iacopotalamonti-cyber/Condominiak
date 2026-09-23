@@ -125,6 +125,41 @@ isola trovando la data. Negli altri due formati no, e il campo resta vuoto:
 meglio di un nome ritagliato a occhio dalla descrizione, che sembra un dato e
 non lo è.
 
+**23/09/2026 — La quota di un appartamento si legge dal riparto, non si calcola.**
+Il rendiconto stampa, unità per unità, quanto paga ciascuna. L'applicazione la
+calcolava come millesimi generali diviso millesimi totali, per la spesa
+dell'anno, e sul 2024-2025 sbagliava da -34% a +59%: il condominio ripartisce
+con nove tabelle millesimali diverse — generali, scale e ascensore, corsello
+garage, fotovoltaico… — e paga riscaldamento e acqua a contatore, che insieme
+sono metà della spesa. Scartato: correggere la divisione usando le tabelle
+giuste. Avrebbe richiesto di sapere quale tabella usa ogni voce di spesa, cioè
+di rifare il riparto che l'amministratore ha già fatto e stampato. Dove il
+riparto non si legge, la pagina non mostra una stima: dice che manca.
+
+**23/09/2026 — L'anagrafica comprende box, cantine e posti auto.**
+Sono unità con i loro millesimi, e nel 2024-2025 hanno pagato 1.357,80 €.
+Senza di loro i millesimi generali sommavano 908,52 e sembrava che mancasse
+qualcosa nei dati; mancavano invece 30 unità. Si collegano a un'unità del
+rendiconto con il codice dell'amministratore ("009"), che resta lo stesso
+anno dopo anno, e non con il nome. Le liste pensate per le persone — gli
+inviti, il selettore degli appartamenti — mostrano solo gli appartamenti.
+
+**23/09/2026 — Il salvataggio collega le quote alle unità, ma non crea unità.**
+Prima per codice; se un'unità non ce l'ha ancora, per tipologia e nome, ma
+solo se il nome ne identifica una sola. Scartato: creare in automatico le
+unità che il riparto nomina e l'anagrafica non ha. Un'unità creata in silenzio
+da un nome scritto diversamente è un doppione che nessuno vede, e sposta la
+quota di un appartamento su un altro. Le quote non collegate restano salvate e
+aspettano un'unità.
+
+**23/09/2026 — Una verifica deve poter fallire su ciò che non ha letto.**
+Il lettore del riparto confrontava ogni colonna letta con il totale stampato di
+quella colonna, e diceva "quadra". Nel 2023-2024 c'era una decima colonna che
+non riconosceva: spariva dalle quote e anche dal confronto, e la verifica
+passava. Ora ogni numero della riga dei totali deve trovare la sua colonna, o
+la lettura si dichiara sbagliata. È una regola generale: un controllo che
+guarda solo ciò che ha capito non si accorge mai di ciò che gli è sfuggito.
+
 ## Aperte
 
 **Cosa vede un condòmino che non è consigliere**, e come trattiamo i dati
