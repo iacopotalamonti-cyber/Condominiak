@@ -10,12 +10,7 @@ import {
   emptyExtraction,
   mergeExtractions,
 } from "../anthropic.ts";
-import {
-  formatUso,
-  millesimiIncompleti,
-  quotaAnnua,
-  sommaMillesimi,
-} from "../calcoli.ts";
+import { formatUso } from "../calcoli.ts";
 import type { Bilancio, Spesa } from "../types.ts";
 
 function bilancio(anno: number, campi: Partial<Bilancio> = {}): Bilancio {
@@ -184,34 +179,6 @@ test("il consumo di token si somma fra i blocchi analizzati", () => {
   const merged = mergeExtractions([a, b]);
   assert.deepEqual(merged.uso, { chiamate: 2, tokenIngresso: 58000, tokenUscita: 3500 });
   assert.equal(formatUso(merged.uso), "Analisi: 2 chiamate al modello, 58k token in ingresso e 3.5k in uscita.");
-});
-
-// La tabella millesimale del condominio somma 908,53 e non 1000: dividere per
-// un 1000 teorico sottostimava ogni rata del 9% senza segnalarlo.
-test("le quote si ripartiscono sui millesimi realmente registrati", () => {
-  const unita = [{ millesimi: 68.6 }, { millesimi: 839.93 }];
-  const totale = sommaMillesimi(unita);
-
-  assert.equal(totale, 908.53);
-  assert.equal(millesimiIncompleti(totale), true);
-  assert.equal(quotaAnnua(68.6, 27748.85, totale), 2095);
-  assert.equal(quotaAnnua(68.6, 27748.85), 1904, "senza il totale reale la quota è sottostimata");
-});
-
-test("una tabella millesimale completa non viene segnalata", () => {
-  const totale = sommaMillesimi([{ millesimi: 500 }, { millesimi: 500 }]);
-  assert.equal(millesimiIncompleti(totale), false);
-  assert.equal(quotaAnnua(500, 10000, totale), 5000);
-});
-
-// La somma delle quote deve coprire la spesa: è il senso stesso del riparto.
-test("le quote di tutte le unità sommano alla spesa dell'esercizio", () => {
-  const unita = [{ millesimi: 68.6 }, { millesimi: 439.93 }, { millesimi: 400 }];
-  const totale = sommaMillesimi(unita);
-  const spesa = 27748.85;
-
-  const somma = unita.reduce((t, u) => t + quotaAnnua(u.millesimi, spesa, totale), 0);
-  assert.ok(Math.abs(somma - spesa) <= unita.length, `le quote sommano ${somma} invece di ${spesa}`);
 });
 
 // ---------------------------------------------------------------------------

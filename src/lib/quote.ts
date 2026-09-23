@@ -5,7 +5,7 @@
 // Qui si decide quale riga va con quale unità — e quando non si sa, si lascia
 // la quota scollegata invece di attaccarla alla prima che somiglia.
 
-import type { QuotaEstratta, TipologiaUnita, Unita } from "./types";
+import type { QuotaEstratta, QuotaUnita, TipologiaUnita, Unita } from "./types";
 
 const MAX_TESTO = 200;
 const MAX_COLONNE = 20;
@@ -126,4 +126,99 @@ export function collegaQuote(quote: QuotaEstratta[], unita: Unita[]): Collegamen
   }
 
   return { unitaPerCodice, codiciDaAssegnare };
+}
+
+// ---------------------------------------------------------------------------
+// Leggere una quota
+// ---------------------------------------------------------------------------
+
+export interface VoceQuota {
+  /** Il nome della colonna, senza la parola che dice di che tipo è. */
+  nome: string;
+  importo: number;
+  /** I millesimi dell'unità in quella tabella; null per le spese a consumo. */
+  millesimi: number | null;
+}
+
+export interface Scomposizione {
+  /** Riscaldamento, acqua, consumi e spese personali: si pagano per quanto si usa. */
+  aConsumo: VoceQuota[];
+  /** Tutto il resto, ciascuno con la sua tabella millesimale. */
+  perMillesimi: VoceQuota[];
+  totaleAConsumo: number;
+  totalePerMillesimi: number;
+  totale: number;
+}
+
+function arrotonda(valore: number): number {
+  return Math.round(valore * 100) / 100;
+}
+
+// La distinzione non la decidiamo noi: la scrive il documento. Le colonne
+// ripartite si intestano "Millesimi …"; le altre — "Spese Riscaldamento",
+// "Personali e Rimborsi", "Consumi Enel Box/Cantine" — sono a consumo o
+// personali. Nessun elenco di nomi da tenere aggiornato.
+const RIPARTITA = /^Millesimi\s+/i;
+
+/**
+ * Divide la quota di un'unità fra ciò che dipende da quanto consuma e ciò che
+ * si ripartisce per millesimi.
+ *
+ * È la distinzione che la divisione per millesimi cancellava: riscaldamento e
+ * acqua sono la metà della spesa del condominio, e si pagano a contatore.
+ */
+export function scomponiQuota(quota: Pick<QuotaUnita, "importi" | "millesimi">): Scomposizione {
+  const aConsumo: VoceQuota[] = [];
+  const perMillesimi: VoceQuota[] = [];
+
+  for (const [colonna, importo] of Object.entries(quota.importi)) {
+    if (!importo) continue;
+    if (RIPARTITA.test(colonna)) {
+      perMillesimi.push({
+        nome: colonna.replace(RIPARTITA, ""),
+        importo,
+        millesimi: quota.millesimi[colonna] ?? null,
+      });
+    } else {
+      aConsumo.push({ nome: colonna.replace(/^Spese\s+/i, ""), importo, millesimi: null });
+    }
+  }
+
+  const perImporto = (a: VoceQuota, b: VoceQuota) => Math.abs(b.importo) - Math.abs(a.importo);
+  aConsumo.sort(perImporto);
+  perMillesimi.sort(perImporto);
+
+  const totaleAConsumo = arrotonda(aConsumo.reduce((t, v) => t + v.importo, 0));
+  const totalePerMillesimi = arrotonda(perMillesimi.reduce((t, v) => t + v.importo, 0));
+
+  return {
+    aConsumo,
+    perMillesimi,
+    totaleAConsumo,
+    totalePerMillesimi,
+    totale: arrotonda(totaleAConsumo + totalePerMillesimi),
+  };
+}
+
+/**
+ * Le altre unità intestate allo stesso nome nello stesso rendiconto: il box,
+ * la cantina, il posto auto di chi abita nell'appartamento.
+ *
+ * Il collegamento è il nome come lo stampa l'amministratore, dentro lo stesso
+ * documento: è l'unico legame che il documento dichiara, e la pagina lo dice
+ * per quello che è, invece di presentarlo come una proprietà accertata.
+ */
+export function pertinenzeDi(quota: QuotaUnita, tutte: QuotaUnita[]): QuotaUnita[] {
+  const nome = chiaveNome(quota.nome_nel_documento);
+  if (!nome) return [];
+
+  return tutte
+    .filter(
+      (q) =>
+        q.anno === quota.anno &&
+        q.codice_unita !== quota.codice_unita &&
+        tipologiaDi(q.tipologia) !== "appartamento" &&
+        chiaveNome(q.nome_nel_documento) === nome
+    )
+    .sort((a, b) => a.codice_unita.localeCompare(b.codice_unita));
 }
