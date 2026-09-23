@@ -632,6 +632,9 @@ export function bilancioVuoto(anno = 0): ExtractedBilancio {
     // Il modello non le distingue dalle spese: le riconosce solo il motore di
     // lettura, che sa quale voce del rendiconto è una partita personale.
     incassi: [],
+    // Anche il riparto per unità lo legge solo il motore: il modello non ha
+    // modo di sapere quale colonna è una base di riparto e quale un totale.
+    quote: [],
     totale: 0,
     fonti: {},
     conflitti: {},

@@ -1,40 +1,11 @@
-import type { Impianto, Pagamento, Unita, UsoModello } from "@/lib/types";
+import type { Impianto, Pagamento, UsoModello } from "@/lib/types";
 
-// La tabella millesimale dovrebbe sommare 1000, ma quella estratta da un
-// documento spesso no: unità mancanti, valori letti male, o millesimi che nel
-// documento sono davvero parziali. Ripartire su un 1000 teorico quando il
-// totale reale è un altro sottostima ogni quota in silenzio — e la somma delle
-// quote non copre il consuntivo. Il denominatore è quindi la somma effettiva.
-export const MILLESIMI_ATTESI = 1000;
-
-export function sommaMillesimi(unita: Pick<Unita, "millesimi">[]): number {
-  return Math.round(unita.reduce((somma, u) => somma + (u.millesimi || 0), 0) * 100) / 100;
-}
-
-// Vero quando la tabella millesimale non somma 1000: la ripartizione resta
-// corretta fra le unità note, ma qualcosa nei dati manca e va detto.
-export function millesimiIncompleti(totale: number): boolean {
-  return totale > 0 && Math.abs(totale - MILLESIMI_ATTESI) > 0.5;
-}
-
-// Quota mensile di un appartamento
-export function quotaMensile(
-  millesimi: number,
-  consuntivoAnnuo: number,
-  totaleMillesimi = MILLESIMI_ATTESI
-): number {
-  return Math.round(quotaAnnua(millesimi, consuntivoAnnuo, totaleMillesimi) / 12);
-}
-
-// Quota annua di un appartamento
-export function quotaAnnua(
-  millesimi: number,
-  consuntivoAnnuo: number,
-  totaleMillesimi = MILLESIMI_ATTESI
-): number {
-  const denominatore = totaleMillesimi > 0 ? totaleMillesimi : MILLESIMI_ATTESI;
-  return Math.round((millesimi / denominatore) * consuntivoAnnuo);
-}
+// La quota di un appartamento non si calcola qui. Stava qui una divisione —
+// millesimi dell'unità diviso millesimi totali, per la spesa dell'anno — ed è
+// stata tolta: il condominio ripartisce con più tabelle millesimali e paga
+// riscaldamento e acqua a contatore, e la divisione sbagliava da -34% a +59%.
+// La quota vera si legge dal riparto del rendiconto: vedi src/lib/riparto.ts
+// e la tabella quote_unita.
 
 // Totale morosità per un condominio
 export function calcolaMorosita(pagamenti: Pagamento[]): number {

@@ -6,7 +6,8 @@ import { CAMPI_IMPORTO } from "@/lib/anthropic";
 import { righeMovimenti } from "@/lib/movimenti";
 import { chiaveFornitore } from "@/lib/fornitori";
 import { risolviFornitori } from "@/lib/fornitori-server";
-import type { ExtractedMovimento, IncassoEstratto, FonteSalvata } from "@/lib/types";
+import { collegaQuote, quoteValide } from "@/lib/quote";
+import type { ExtractedMovimento, IncassoEstratto, FonteSalvata, Unita } from "@/lib/types";
 
 interface SaveBilancioBody {
   condominiumId: string;
@@ -22,6 +23,8 @@ interface SaveBilancioBody {
   movimenti: ExtractedMovimento[];
   // Le partite di singoli condomini comprese nel totale del documento.
   incassi: IncassoEstratto[];
+  // La quota di ogni unità, letta dal riparto.
+  quote: unknown;
   documentoPath: string | null;
 }
 
@@ -227,6 +230,57 @@ export async function POST(req: NextRequest) {
       if (error) console.warn("Incassi non salvabili:", error.message);
     }
 
+    // Le quote per unità. Si collegano all'anagrafica per codice o, la prima
+    // volta, per nome; quelle che non si sanno collegare restano, perché sono
+    // numeri del documento, e aspettano un'unità.
+    //
+    // A differenza delle spese, un salvataggio senza quote non cancella quelle
+    // già in archivio: un documento riletto dal modello non porta il riparto,
+    // e sostituirlo con niente sarebbe perdere il numero più guardato
+    // dell'applicazione. Per toglierle c'è la cancellazione dell'esercizio.
+    const quote = quoteValide(body.quote);
+    if (quote.length) {
+      const { data: datiUnita } = await supabase
+        .from("unita")
+        .select("*")
+        .eq("condominium_id", condominiumId);
+      const { unitaPerCodice, codiciDaAssegnare } = collegaQuote(quote, (datiUnita ?? []) as Unita[]);
+
+      for (const { unitaId, codice, sub } of codiciDaAssegnare) {
+        const { error } = await supabase
+          .from("unita")
+          .update({ codice, sub: sub || null })
+          .eq("id", unitaId)
+          .is("codice", null);
+        if (error) console.warn("Codice non assegnato all'unità:", error.message);
+      }
+
+      const { error: delQuoteErr } = await supabase
+        .from("quote_unita")
+        .delete()
+        .eq("condominium_id", condominiumId)
+        .eq("anno", anno);
+      if (delQuoteErr) throw delQuoteErr;
+
+      const { error } = await supabase.from("quote_unita").insert(
+        quote.map((q) => ({
+          condominium_id: condominiumId,
+          anno,
+          unita_id: unitaPerCodice.get(q.codice) ?? null,
+          codice_unita: q.codice,
+          tipologia: q.tipologia || null,
+          nome_nel_documento: q.nome || null,
+          importi: q.importi,
+          millesimi: q.millesimi,
+          totale: q.totale,
+          fonte_documento: documentoPath?.split("/").pop() ?? null,
+          fonte_pagina: q.pagina || null,
+          documento_path: documentoPath,
+        }))
+      );
+      if (error) throw error;
+    }
+
     // Come per le spese, ricaricare lo stesso anno sostituisce il dettaglio
     // invece di affiancarne una seconda copia.
     const { error: delMovErr } = await supabase
@@ -288,7 +342,7 @@ export async function DELETE(req: NextRequest) {
     // Le tre tabelle che compongono un esercizio. Il documento caricato NON si
     // cancella: resta in archivio, così l'anno si può rileggere senza doverlo
     // ricaricare.
-    for (const tabella of ["movimenti", "incassi", "spese", "bilanci"] as const) {
+    for (const tabella of ["movimenti", "incassi", "quote_unita", "spese", "bilanci"] as const) {
       const { error } = await supabase
         .from(tabella)
         .delete()

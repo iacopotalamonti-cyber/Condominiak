@@ -64,10 +64,109 @@ mandare l'intero PDF come immagini a ogni analisi — 43 pagine per estrarne 9 d
 spese, con un costo per ogni rilettura e un risultato che può cambiare fra due
 letture dello stesso file.
 
-Il parser si ferma quando non riconosce un formato invece di indovinare: sul
-rendiconto dell'amministratore precedente (MULTIGEST) riconosce zero pagine e
-lo dichiara. È la proprietà che lo distingue da un modello, che un numero lo
-restituisce sempre.
+Il parser si ferma quando non riconosce un formato invece di indovinare. È la
+proprietà che lo distingue da un modello, che un numero lo restituisce sempre.
+(MULTIGEST, che quel giorno non si leggeva, è stato aggiunto il 20/09: i formati
+riconosciuti sono tre.)
+
+**20/09/2026 — I formati sono dati, non codice generato.**
+Un formato nuovo si descrive con una scheda — dove sono le colonne, come si
+riconosce una voce, dove sta il totale — che un motore solo, scritto e
+verificato una volta, esegue. Scartato: far scrivere al modello un lettore in
+codice per ogni formato nuovo, che era la strada più diretta e anche la più
+pericolosa. Una scheda dice dove guardare, non cosa fare: al peggio legge male
+dei numeri, e la quadratura contro il totale stampato se ne accorge. Codice
+generato a runtime avrebbe potuto fare qualunque cosa, e nessuno lo avrebbe
+riletto. Costo: un formato che non si lascia descrivere dalla scheda richiede di
+estendere il motore, e l'estensione va rivista da noi.
+
+**20/09/2026 — Una lettura si usa solo se quadra al centesimo.**
+Il rendiconto stampa il proprio totale: la lettura si confronta con quello. Se
+lo scarto supera un centesimo, se compare un codice che il profilo non conosce,
+o se non si capisce l'anno, la lettura si dichiara inutilizzabile e il documento
+va al modello come prima. Scartato: usare la lettura migliore disponibile e
+segnalare l'incertezza. Un numero sbagliato gratis costa più di uno giusto a
+pagamento, perché nessuno lo ricontrolla.
+
+**20/09/2026 — Un esercizio a cavallo prende l'anno in cui chiude.**
+Il rendiconto 01/08/2024 – 31/07/2025 è l'esercizio 2025. Scartato: l'anno di
+apertura. Era già sbagliato in archivio — il 2024-2025 stava sotto il 2024 — e
+sistemarlo ha richiesto di spostare tutto di uno. La regola vale ovunque:
+nell'estrazione, nel database, nei selettori d'anno.
+
+**20/09/2026 — Quello che il condominio incassa sta fuori dalle spese, in una tabella sua.**
+Il rendiconto tiene dentro il proprio totale anche le partite di singoli
+condomini: un rimborso assicurativo incassato, una spesa riaddebitata a chi
+l'ha causata. Vanno in `incassi`, e vale sempre `spese = totale stampato −
+incassi`. Scartato: sommarle alle categorie col segno che hanno — il rimborso
+di 2.500 € del 2023-2024 avrebbe reso negativa l'assicurazione e reso gli anni
+non confrontabili. Scartato anche: riscrivere il totale stampato per far
+tornare i conti. È la cifra che il condòmino ritrova sulla carta, e cambiarla
+sarebbe mentirgli.
+
+**20/09/2026 — Il fotovoltaico è una categoria a sé.**
+È un impianto del condominio con costi ricorrenti propri: assistenza, accisa,
+oneri fiscali, manutenzioni straordinarie. Finiva in "varie", e i 5.378,85 € di
+manutenzione straordinaria del 2023-2024 sparivano dentro una voce che non
+significa niente.
+
+**20/09/2026 — I movimenti di una voce si tengono solo se sommano al totale della voce.**
+Altrimenti si scartano tutti. Scartato: tenerne una parte e dichiarare la
+copertura riga per riga. Un elenco di fatture a cui ne manca una si legge come
+se fosse completo, e nessuno va a controllare quanto è completo. Conseguenza:
+sui rendiconti Tosiani il dettaglio per fornitore copre l'84% delle spese, e il
+resto sono fatture ripartite a percentuale fra più voci — la luce di un
+contatore diviso fra scale, ascensore e autorimesse — che non appartengono a
+una voce sola. La percentuale si dice, non si nasconde.
+
+**20/09/2026 — Fornitore e data si leggono solo dove il formato dà loro una colonna.**
+Nei rendiconti Tosiani il fornitore sta prima del numero di documento, e si
+isola trovando la data. Negli altri due formati no, e il campo resta vuoto:
+meglio di un nome ritagliato a occhio dalla descrizione, che sembra un dato e
+non lo è.
+
+**23/09/2026 — La quota di un appartamento si legge dal riparto, non si calcola.**
+Il rendiconto stampa, unità per unità, quanto paga ciascuna. L'applicazione la
+calcolava come millesimi generali diviso millesimi totali, per la spesa
+dell'anno, e sul 2024-2025 sbagliava da -34% a +59%: il condominio ripartisce
+con nove tabelle millesimali diverse — generali, scale e ascensore, corsello
+garage, fotovoltaico… — e paga riscaldamento e acqua a contatore, che insieme
+sono metà della spesa. Scartato: correggere la divisione usando le tabelle
+giuste. Avrebbe richiesto di sapere quale tabella usa ogni voce di spesa, cioè
+di rifare il riparto che l'amministratore ha già fatto e stampato. Dove il
+riparto non si legge, la pagina non mostra una stima: dice che manca.
+
+**23/09/2026 — L'anagrafica comprende box, cantine e posti auto.**
+Sono unità con i loro millesimi, e nel 2024-2025 hanno pagato 1.357,80 €.
+Senza di loro i millesimi generali sommavano 908,52 e sembrava che mancasse
+qualcosa nei dati; mancavano invece 30 unità. Si collegano a un'unità del
+rendiconto con il codice dell'amministratore ("009"), che resta lo stesso
+anno dopo anno, e non con il nome. Le liste pensate per le persone — gli
+inviti, il selettore degli appartamenti — mostrano solo gli appartamenti.
+
+**23/09/2026 — Il salvataggio collega le quote alle unità, ma non crea unità.**
+Prima per codice; se un'unità non ce l'ha ancora, per tipologia e nome, ma
+solo se il nome ne identifica una sola. Scartato: creare in automatico le
+unità che il riparto nomina e l'anagrafica non ha. Un'unità creata in silenzio
+da un nome scritto diversamente è un doppione che nessuno vede, e sposta la
+quota di un appartamento su un altro. Le quote non collegate restano salvate e
+aspettano un'unità.
+
+**23/09/2026 — Una verifica deve poter fallire su ciò che non ha letto.**
+Il lettore del riparto confrontava ogni colonna letta con il totale stampato di
+quella colonna, e diceva "quadra". Nel 2023-2024 c'era una decima colonna che
+non riconosceva: spariva dalle quote e anche dal confronto, e la verifica
+passava. Ora ogni numero della riga dei totali deve trovare la sua colonna, o
+la lettura si dichiara sbagliata. È una regola generale: un controllo che
+guarda solo ciò che ha capito non si accorge mai di ciò che gli è sfuggito.
+
+**23/09/2026 — Nessun permesso ad anon sulle tabelle.**
+Supabase concedeva tutto a tutti, anche a chi ha solo la chiave pubblica, e
+lasciava alla RLS il compito di fermarlo. L'applicazione non legge mai una
+tabella senza un utente autenticato, quindi anon non ha bisogno di niente.
+Scartato: seguire il modello suggerito da Supabase, che concede a anon la
+lettura. Con la RLS scritta bene non cambierebbe nulla; con una policy scritta
+male, la differenza è fra un errore e i dati di un condominio su internet.
 
 ## Aperte
 

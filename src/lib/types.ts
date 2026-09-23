@@ -19,13 +19,25 @@ export interface Condominium {
   owner_id: string;
 }
 
+// Un condominio non è fatto solo di appartamenti: box, cantine e posti auto
+// sono unità con i loro millesimi, e pagano la loro parte.
+export type TipologiaUnita = "appartamento" | "box" | "cantina" | "posto_auto" | "altro";
+
 export interface Unita {
   id: string;
   created_at: string;
   condominium_id: string;
-  interno: number;
+  // Solo gli appartamenti ne hanno uno: un box si riconosce dal codice.
+  interno: number | null;
+  // Il codice con cui l'amministratore identifica l'unità nel rendiconto
+  // ("009"): collega l'unità alla sua riga di riparto, anno dopo anno.
+  codice: string | null;
+  sub: string | null;
+  tipologia: TipologiaUnita;
   piano: string | null;
   mq: number | null;
+  // Millesimi generali. Non sono la base della quota: il condominio ripartisce
+  // con più tabelle, e la quota vera sta in `QuotaUnita`.
   millesimi: number;
   nome_proprietario: string | null;
   email: string | null;
@@ -116,6 +128,27 @@ export interface Incasso {
   fonte_verificabile: boolean;
   documento_path: string | null;
   note: string | null;
+}
+
+// Quanto paga un'unità in un esercizio, come il rendiconto lo stampa. Non è
+// calcolato: le colonne sono le basi di riparto del condominio (millesimi
+// generali, scale e ascensore, riscaldamento a contatore…), e cambiano da un
+// esercizio all'altro.
+export interface QuotaUnita {
+  id: string;
+  created_at: string;
+  condominium_id: string;
+  anno: number;
+  unita_id: string | null;
+  codice_unita: string;
+  tipologia: string | null;
+  nome_nel_documento: string | null;
+  importi: Record<string, number>;
+  millesimi: Record<string, number>;
+  totale: number;
+  fonte_documento: string | null;
+  fonte_pagina: number | null;
+  documento_path: string | null;
 }
 
 // Il fornitore come entità del condominio, non come stringa ripetuta su ogni
@@ -316,6 +349,17 @@ export interface IncassoEstratto {
   fonte: Fonte | null;
 }
 
+export interface QuotaEstratta {
+  codice: string;
+  tipologia: string;
+  sub: string;
+  nome: string;
+  importi: Record<string, number>;
+  millesimi: Record<string, number>;
+  totale: number;
+  pagina: number;
+}
+
 export interface ExtractedBilancio {
   anno: number;
   prev: number;
@@ -334,6 +378,10 @@ export interface ExtractedBilancio {
   // differenza fra le voci di spesa e il totale stampato, ed è l'unica cosa
   // che la spiega.
   incassi: IncassoEstratto[];
+  // La quota di ogni unità, letta dal riparto. Vuota quando il documento non
+  // ne ha uno in un formato che sappiamo leggere, o quando quello letto non
+  // torna con i totali che il documento stesso stampa.
+  quote: QuotaEstratta[];
   fonti: Partial<Record<CampoImporto, Fonte>>;
   conflitti: Partial<Record<CampoImporto, ValoreScartato[]>>;
 }
