@@ -1,5 +1,6 @@
 import type { Config } from "@netlify/functions";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import * as Sentry from "@sentry/node";
 
 import { sistema, type Dati, type Esito } from "../../src/lib/manutenzione";
 import { BUCKET, CARTELLA_DOCUMENTI, CARTELLA_TEMPORANEA } from "../../src/lib/percorsi";
@@ -11,6 +12,12 @@ export const config: Config = { schedule: "@hourly" };
 // Una funzione pianificata ha 30 secondi: ci si ferma prima, e quello che
 // resta si fa all'ora successiva. Ogni passo è completo in sé.
 const BUDGET_MS = 22_000;
+
+// Il piano gratuito di Supabase ha 1 GB di Storage. Si avvisa all'80%, che a
+// ritmo di qualche rendiconto al mese è un margine di settimane, non di ore.
+// Con il piano Pro si alza con la variabile LIMITE_STORAGE_MB.
+const LIMITE_PREDEFINITO_MB = 1024;
+const SOGLIA_AVVISO = 0.8;
 
 // Le colonne che puntano a un file del bucket.
 const CITAZIONI: [tabella: string, colonna: string][] = [
@@ -87,6 +94,11 @@ export default async () => {
     return;
   }
 
+  const dsn = Netlify.env.get("NEXT_PUBLIC_SENTRY_DSN");
+  if (dsn && !Sentry.isInitialized()) {
+    Sentry.init({ dsn, environment: Netlify.env.get("CONTEXT") ?? "unknown", tracesSampleRate: 0, sendDefaultPii: false });
+  }
+
   const supabase = createClient(url, chiave, { auth: { autoRefreshToken: false, persistSession: false } });
   const bucket = supabase.storage.from(BUCKET);
   const dati = datiDa(supabase);
@@ -126,4 +138,27 @@ export default async () => {
       (liberati ? `; liberati ${(liberati / 1_048_576).toFixed(1)} MB` : "") +
       (rimasti ? `; ${rimasti} rimandati all'ora successiva` : "")
   );
+
+  await controllaSpazio(supabase);
+  await Sentry.flush(2000).catch(() => {});
 };
+
+async function controllaSpazio(supabase: SupabaseClient) {
+  const { data, error } = await supabase.rpc("spazio_bucket").single<{ file: number; byte: number }>();
+  if (error || !data) {
+    console.error("manutenzione-storage: spazio non misurato:", error?.message);
+    return;
+  }
+  const limiteMb = Number(Netlify.env.get("LIMITE_STORAGE_MB")) || LIMITE_PREDEFINITO_MB;
+  const usatiMb = Number(data.byte) / 1_048_576;
+  const quota = usatiMb / limiteMb;
+  const riga = `${data.file} file, ${usatiMb.toFixed(1)} MB su ${limiteMb} MB (${Math.round(quota * 100)}%)`;
+  if (quota < SOGLIA_AVVISO) {
+    console.log(`manutenzione-storage: bucket ${riga}`);
+    return;
+  }
+  // Oltre il limite i caricamenti falliscono, e con loro l'onboarding di un
+  // condominio nuovo: va saputo prima.
+  console.error(`manutenzione-storage: bucket quasi pieno, ${riga}`);
+  Sentry.captureMessage(`Storage quasi pieno: ${riga}`, "warning");
+}
