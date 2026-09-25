@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
 import { Loader2, Trash2 } from "lucide-react";
+
+import { eliminaEsercizio } from "@/app/dashboard/azioni";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -33,29 +34,22 @@ export function EliminaEsercizio({
   movimenti,
   documentoInArchivio,
 }: EliminaEsercizioProps) {
-  const router = useRouter();
   const [aperto, setAperto] = useState(false);
-  const [lavorando, setLavorando] = useState(false);
+  const [lavorando, avvia] = useTransition();
   const [errore, setErrore] = useState("");
 
-  async function elimina() {
-    setLavorando(true);
+  function elimina() {
     setErrore("");
-    try {
-      const res = await fetch(
-        `/api/save-bilancio?condominiumId=${encodeURIComponent(condominiumId)}&anno=${anno}`,
-        { method: "DELETE" }
-      );
-      const json = await res.json();
-      if (!res.ok || !json.success) throw new Error(json.error || "Eliminazione fallita");
-
+    avvia(async () => {
+      // L'azione server aggiorna la pagina da sola: quando torna, l'esercizio
+      // è già sparito dalla tabella.
+      const esito = await eliminaEsercizio(condominiumId, anno);
+      if (!esito.success) {
+        setErrore(esito.error);
+        return;
+      }
       setAperto(false);
-      router.refresh();
-    } catch (err) {
-      setErrore(err instanceof Error ? err.message : "Eliminazione fallita");
-    } finally {
-      setLavorando(false);
-    }
+    });
   }
 
   const pezzi = [
