@@ -19,12 +19,11 @@ ogni rilascio successivo.
 - [x] CI su GitHub Actions: `lint` + `test` + `build` a ogni push e PR (il lint falliva già: sistemato)
 - [x] Ambiente di staging: progetto Supabase `shzxqeyyxjhultofwzfz` ("Condominiak
       Staging", eu-west-1), con lo schema iniziale applicato e verificato identico
-      alla produzione. **Resta da fare a mano**: su Netlify, in Deploy contexts →
-      Deploy Previews, impostare le variabili Supabase dello staging, così le
-      anteprime non scrivono sul database vero
-- [x] Tracciamento errori (Sentry) su browser, server e funzione di estrazione.
-      **Resta da fare a mano**: impostare `NEXT_PUBLIC_SENTRY_DSN` su Netlify
-      (e `NEXT_PUBLIC_SENTRY_ENV`), altrimenti non parte nulla
+      alla produzione. Su Netlify le anteprime e i branch deploy puntano allo
+      staging (verificato il 25/09/2026: URL e chiavi sono del progetto di
+      staging), quindi non scrivono sul database vero
+- [x] Tracciamento errori (Sentry) su browser, server e funzioni. DSN e
+      ambiente impostati su Netlify per tutti i contesti
 - [x] CORS ristretto a `https://www.condominiak.me` (era `*`)
 - [x] Backup giornaliero del database in `.github/workflows/backup.yml`, con il
       segreto `SUPABASE_DB_URL` impostato. Prima copia prodotta il 20/09/2026.

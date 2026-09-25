@@ -105,10 +105,11 @@ sono affatto:
   delibera diventa un dato.
 - **I fornitori nascono solo dall'estrazione** (`src/lib/fornitori-server.ts`):
   dall'interfaccia non se ne può aggiungere o correggere uno a mano.
-- **Lo staging esiste ma Netlify non lo usa ancora**: finché le anteprime di
-  deploy non puntano al progetto di staging, continuano a scrivere sul database
-  di produzione.
-- **Sentry è collegato ma spento finché manca il DSN su Netlify.**
+- **Le anteprime e i branch deploy usano lo staging** (verificato il 25/09/2026):
+  URL, chiave pubblica e service role dei contesti Deploy Previews e Branch
+  deploys sono quelli del progetto `shzxqeyyxjhultofwzfz`. Per entrare in
+  un'anteprima serve un account sullo staging, non quello di produzione.
+- **Sentry è acceso**: il DSN è impostato su Netlify per tutti i contesti.
 - **Il backup non è ancora stato provato con un ripristino.** Dal 20/09/2026 il
   database ha una copia giornaliera (`.github/workflows/backup.yml`), ma finché
   non se ne ripristina una su staging non sappiamo se sia utilizzabile.
