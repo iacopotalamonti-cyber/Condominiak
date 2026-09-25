@@ -30,6 +30,11 @@ ogni rilascio successivo.
       La stringa deve essere quella del **Session pooler**: la connessione
       diretta risponde solo su IPv6 e i runner di GitHub non la raggiungono
 - [ ] Provare un ripristino su staging: un backup non provato non è un backup
+- [ ] **Portare Netlify a Node 22** (`netlify.toml`, `NODE_VERSION = "20"`). La CI
+      gira già su 22; build e funzioni su 20, che supabase-js dichiara deprecato
+      e su cui non trova il WebSocket: le funzioni che lo usano hanno bisogno di
+      `src/lib/websocket-polyfill.ts`. Il 25/09/2026 la manutenzione dello
+      Storage è fallita alla prima esecuzione proprio per questo
 - [ ] **Il backup dipende da un'immagine Docker da scaricare ogni volta.** Il
       23/09/2026 il registro di GitHub l'ha rifiutata due volte di fila per
       troppe richieste, e il backup lanciato a mano non è mai partito. I notturni

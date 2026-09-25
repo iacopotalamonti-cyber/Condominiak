@@ -2,6 +2,10 @@ import type { Config } from "@netlify/functions";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import * as Sentry from "@sentry/node";
 
+// Le funzioni Netlify girano su Node 20, che non ha un WebSocket globale:
+// senza, supabase-js si ferma già nel costruire il client. È successo alla
+// prima esecuzione in produzione, il 25/09/2026.
+import "../../src/lib/websocket-polyfill";
 import { sistema, type Dati, type Esito } from "../../src/lib/manutenzione";
 import { BUCKET, CARTELLA_DOCUMENTI, CARTELLA_TEMPORANEA } from "../../src/lib/percorsi";
 
