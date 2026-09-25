@@ -45,13 +45,30 @@ const TOLLERANZA_COLONNA = 30;
  * l'inquilino. Una pagina che non ha questa intestazione non è una pagina di
  * elenco spese, e restituisce null invece di una mappa inventata.
  */
-export function mappaColonne(frammenti: Frammento[]): MappaColonne | null {
+export interface Intestazioni {
+  /** La parola che intesta la colonna dell'importo del movimento. */
+  movimento: RegExp;
+  /** Le parole che intestano le colonne dei totali, da sinistra a destra. */
+  totali: RegExp;
+}
+
+// Le parole dei formati conosciuti. Un formato che intesta le colonne in un
+// altro modo le dichiara nella sua scheda.
+export const INTESTAZIONI_PREDEFINITE: Intestazioni = {
+  movimento: /^Importo$/,
+  totali: /^(Parziale|Totale)$/,
+};
+
+export function mappaColonne(
+  frammenti: Frammento[],
+  parole: Intestazioni = INTESTAZIONI_PREDEFINITE
+): MappaColonne | null {
   const intestazioni = frammenti
-    .filter((f) => /^(Importo|Parziale|Totale)$/.test(f.testo.trim()))
+    .filter((f) => parole.movimento.test(f.testo.trim()) || parole.totali.test(f.testo.trim()))
     .sort((a, b) => a.xFine - b.xFine);
 
-  const importo = intestazioni.find((f) => f.testo.trim() === "Importo");
-  const coppie = intestazioni.filter((f) => f.testo.trim() !== "Importo");
+  const importo = intestazioni.find((f) => parole.movimento.test(f.testo.trim()));
+  const coppie = intestazioni.filter((f) => f !== importo && parole.totali.test(f.testo.trim()));
 
   // Servono almeno "Importo" e la prima coppia parziale/totale: sotto questa
   // soglia non stiamo guardando la tabella delle spese.

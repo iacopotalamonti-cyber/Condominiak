@@ -13,7 +13,14 @@
 // quadratura contro il totale stampato se ne accorge. Codice generato a runtime
 // avrebbe potuto fare qualunque cosa.
 
-import { importoDi, mappaColonne, type MappaColonne, type Pagina, type Riga } from "./rendiconto.ts";
+import {
+  importoDi,
+  INTESTAZIONI_PREDEFINITE,
+  mappaColonne,
+  type MappaColonne,
+  type Pagina,
+  type Riga,
+} from "./rendiconto.ts";
 
 // ---------------------------------------------------------------------------
 // La scheda
@@ -55,6 +62,12 @@ export interface ProfiloFormato {
   colonnaTotale?: number;
   /** Seconda colonna di totale, quando il formato separa proprietario e conduttore. */
   colonnaTotaleSecondaria?: number;
+  /**
+   * Le parole che intestano le colonne, come espressioni sul testo intero di
+   * un frammento. Senza, valgono quelle dei formati conosciuti: "Importo" per
+   * il movimento, "Parziale" e "Totale" per i totali.
+   */
+  intestazioni?: { movimento: string; totali: string };
   voce: RegolaVoce;
   /** Come si isola il fornitore in una riga di movimento, dove è isolabile. */
   fornitore?: RegolaFornitore;
@@ -192,6 +205,9 @@ export function leggi(pagine: Pagina[], profilo: ProfiloFormato): Lettura {
   const schemaPersonali = profilo.personali ? new RegExp(profilo.personali) : null;
 
   const nomi = new Map<string, string>();
+  const parole = profilo.intestazioni
+    ? { movimento: new RegExp(profilo.intestazioni.movimento, "i"), totali: new RegExp(profilo.intestazioni.totali, "i") }
+    : INTESTAZIONI_PREDEFINITE;
 
   for (const pagina of pagine) {
     if (totaleGenerale !== null && profilo.fermatiAlTotale) break;
@@ -199,7 +215,7 @@ export function leggi(pagine: Pagina[], profilo: ProfiloFormato): Lettura {
     const mappa =
       profilo.colonnaTotale === undefined
         ? null
-        : mappaColonne(pagina.righe.flatMap((r) => r.frammenti));
+        : mappaColonne(pagina.righe.flatMap((r) => r.frammenti), parole);
 
     // Un formato a colonne che su questa pagina non le trova sta guardando
     // una relazione o un riparto, non l'elenco delle spese.

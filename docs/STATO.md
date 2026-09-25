@@ -32,7 +32,8 @@ tutto il codice (19/09/2026); non esistono più riferimenti a CondoTwin.
 | Invito via token | `src/app/invite/[token]/`, `src/app/api/invite-resident/`, `src/app/api/accetta-invito/`, `src/lib/inviti.ts` | funzionante — token segreto (solo l'impronta nel database), 14 giorni, uso singolo, legato all'email; accettato lato server |
 | Più condomini e più unità per persona | `src/lib/appartenenza.ts`, `src/components/layout/CondominioSelector.tsx` | funzionante — tabelle `membri` e `unita_membri`, condominio attivo scelto con un cookie |
 | Wizard di onboarding condominio | `src/app/onboarding/`, `src/components/onboarding/` | funzionante |
-| Lettura diretta dei rendiconti conosciuti | `src/lib/lettura.ts`, `src/lib/motore.ts`, `src/lib/profili.ts`, `src/lib/profilo.ts` | funzionante, tre formati, costo zero |
+| Lettura diretta dei rendiconti conosciuti | `src/lib/lettura.ts`, `src/lib/motore.ts`, `src/lib/profili.ts`, `src/lib/profilo.ts` | funzionante, tre formati scritti a mano più quelli approvati, costo zero |
+| Scheda di formato proposta dal modello | `src/lib/scheda.ts`, `src/lib/proposta-scheda.ts`, `src/app/dashboard/formati/` | per un PDF di formato sconosciuto il modello propone una scheda; il motore la prova contro il totale stampato; se quadra aspetta l'approvazione di un operatore (`OPERATORI`), poi legge senza modello tutti i rendiconti di quel formato. Non ancora provata su un formato vero |
 | Estrazione AI da documenti | `netlify/functions/extract-background.mts`, `src/app/api/extract-status/` | funzionante, asincrona — usata solo quando la lettura diretta non basta. Chiede il token di sessione; analizza solo file propri o di un condominio che si amministra; lo stato lo legge solo chi l'ha avviata |
 | Provenienza degli importi (documento/pagina/riga) | `fonti` su `bilanci`, `fonte_*` su `spese`/`movimenti` | funzionante |
 | Quadratura bilancio + conflitti | `src/lib/bilancio.ts`, `src/lib/riconciliazione.ts` | funzionante, con test |
@@ -51,7 +52,8 @@ tutto il codice (19/09/2026); non esistono più riferimenti a CondoTwin.
 ## Modello dati (tabelle Supabase)
 
 `condominiums`, `membri`, `unita`, `unita_membri`, `inviti`, `bilanci`, `spese`, `incassi`,
-`quote_unita`, `movimenti`, `fornitori`, `impianti`, `pagamenti`, `documenti`. Definizioni TypeScript in `src/lib/types.ts`.
+`quote_unita`, `movimenti`, `fornitori`, `impianti`, `pagamenti`, `documenti`,
+`schede_formato`. Definizioni TypeScript in `src/lib/types.ts`.
 
 Migrazioni applicate, in ordine (`supabase/migrations/`):
 
@@ -69,6 +71,7 @@ Migrazioni applicate, in ordine (`supabase/migrations/`):
    policy riscritte sopra di esse
 10. `20260925100000_storage_per_condominio.sql` — le policy del bucket su `membri`
 11. `20260925110000_spazio_documenti.sql` — quanto occupano i documenti
+12. `20260925120000_schede_formato.sql` — le schede proposte dal modello e le decisioni; solo il server la legge
 
 I numeri di Via Enriques 3 scritti a mano — sei esercizi, incassi, quote e
 anagrafica del 2023-2025 — erano migrazioni e non lo sono più: stanno in
@@ -117,7 +120,7 @@ sono affatto:
 
 ## Test presenti
 
-`npm test` — quattordici file in `src/lib/__tests__/`, 135 test: calcolo, parsing e
+`npm test` — quindici file in `src/lib/__tests__/`, 145 test: calcolo, parsing e
 lettura dei rendiconti, inviti, percorsi e archiviazione dei documenti,
 manutenzione dello Storage, e le regole sulle migrazioni. Non le pagine, non le
 API, non i flussi end-to-end.
@@ -151,3 +154,14 @@ Verificata sui sei rendiconti di Via Enriques 3, dal 2019-2020 al 2024-2025:
 sei letture utilizzabili, scarto 0,00 su tutte.
 
 Da riga di comando: `npm run leggi-bilancio -- percorso/del/rendiconto.pdf`.
+
+Un formato nuovo non richiede più di scrivere la scheda a mano. Quando arriva
+un PDF che nessuna scheda riconosce, dopo l'estrazione normale la funzione
+chiede al modello una scheda, gli mostra il documento con le coordinate di ogni
+frammento, e la prova col motore: se la lettura non quadra, il modello riceve
+il motivo e ciò che il motore ha letto, e riprova una volta. Una scheda passa
+solo se ha la forma che il motore conosce (niente campi in più, espressioni che
+non possono bloccare la lettura, categorie esistenti), se quadra al centesimo
+con il totale stampato, se trova l'anno e se non lascia voci senza categoria.
+A quel punto aspetta in `/dashboard/formati`, dove un operatore vede voce per
+voce cosa ha letto e in quale categoria l'ha messa, e la approva o la rifiuta.

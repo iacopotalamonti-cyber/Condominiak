@@ -9,10 +9,13 @@ import {
   unitaDi,
   type Appartenenza,
 } from "@/lib/appartenenza";
+import { eOperatore } from "@/lib/operatori";
 import type { Condominium, Role, Unita } from "@/lib/types";
 
 export interface DashboardContext {
   userId: string;
+  /** Chi gestisce Condominiak (variabile OPERATORI): decide sulle schede di formato. */
+  operatore: boolean;
   /** Il ruolo nel condominio che l'utente sta guardando. */
   role: Role;
   condominium: Condominium;
@@ -45,6 +48,7 @@ export async function getDashboardContext(): Promise<DashboardContext> {
 
   return {
     userId: user.id,
+    operatore: eOperatore(user.email),
     role: attivo.ruolo,
     condominium: attivo.condominium,
     condomini,

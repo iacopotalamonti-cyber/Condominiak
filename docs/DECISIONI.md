@@ -207,6 +207,18 @@ esercizi di tutti. Sono passate in `supabase/dati/`, dove ogni file nomina il
 condominio per id e si ferma se non lo trova. Non si riscrive la storia di
 produzione: sono già state applicate, e restano come registro.
 
+**25/09/2026 — Una scheda proposta dal modello la approva una persona.**
+Il modello propone, il motore prova, una persona decide. La quadratura dice
+che i numeri letti tornano con il totale stampato; non dice se la polizza è
+finita in "assicurazione" o in "varie", ed è questo che l'operatore guarda,
+voce per voce. Fino all'approvazione il documento lo legge il modello come
+prima: l'utente non aspetta la decisione. Decide chi gestisce Condominiak (la
+variabile `OPERATORI`), non l'amministratore del condominio, perché una scheda
+approvata legge i rendiconti di tutti i condomini di quello studio.
+Scartato: usare subito una scheda che quadra. Due voci scambiate di categoria
+quadrano lo stesso, e da quel momento sbaglierebbero in silenzio su ogni
+rendiconto di quel formato.
+
 ## Aperte
 
 **Cosa vede un condòmino che non è consigliere**, e come trattiamo i dati
