@@ -30,7 +30,25 @@ privacy).
 Sono descritti in `STATO.md` con il loro stato reale. Qui elenchiamo solo quelli
 di cui vuoi **cambiare** o **estendere** il comportamento.
 
-### (nessuno per ora — aggiungi qui le modifiche che vuoi ai servizi esistenti)
+### Accesso — login con Google e Apple (estende "Registrazione / login")
+
+- **Per chi**: entrambi
+- **Serve a**: abbassare l'attrito all'iscrizione — un tocco con un account che
+  si ha già, niente password nuova da creare e ricordare
+- **Fatto quando**: dalla pagina di login/registrazione si entra anche con
+  Google o con Apple, oltre a email e password già esistenti; il primo accesso
+  con un provider esterno crea l'utente come oggi fa la registrazione via email
+- **Da dove vengono i dati**: servizio esterno (OAuth di Google e di Apple, via
+  Supabase Auth)
+- **Cosa succede se va storto**: il provider nega il consenso; l'email che
+  arriva da Google/Apple corrisponde a un account già creato via email e
+  password (va collegata allo stesso utente, non duplicata); l'utente revoca
+  l'accesso dal proprio account Google/Apple
+
+**Vincoli**: dati personali (email, nome) arrivano da un servizio esterno — va
+riflesso nell'informativa privacy quando si scrive (Fase 2); vanno configurate
+le credenziali OAuth lato Google Cloud Console e Apple Developer (client id,
+secret, redirect URI) prima di attivarlo.
 
 ---
 
@@ -64,6 +82,12 @@ di cui vuoi **cambiare** o **estendere** il comportamento.
    consultare i documenti contabili (art. 1130-bis c.c.), ma mostrare le
    morosità altrui dentro un'app va deciso con attenzione. Chi vede cosa è una
    scelta di prodotto, non un dettaglio tecnico.
+5. **Anche il marketing pubblico si rivolge al condòmino, non
+   all'amministratore.** La pagina vetrina e il posizionamento SEO
+   (`ROADMAP.md` → "La pagina che vende il prodotto") vanno scritti con le
+   parole di chi vive nel condominio — le quattro frasi di questo file — non
+   con quelle di un gestionale per professionisti: è lo stesso scarto già
+   fatto per il cliente pagante.
 
 ### Chi vede cosa (risposta del 19/09/2026)
 
