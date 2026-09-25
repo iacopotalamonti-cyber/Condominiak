@@ -46,13 +46,14 @@ export default async function AppartamentoPage({
 }: {
   searchParams: Promise<{ unitaId?: string; anno?: string }>;
 }) {
-  const { role, condominium, unita: ownUnita } = await getDashboardContext();
+  const { role, condominium, unita: mieUnita } = await getDashboardContext();
   const supabase = await createClient();
   const annoCorrente = new Date().getFullYear();
 
-  // L'amministratore sceglie fra gli appartamenti. Box, cantine e posti auto
-  // compaiono come pertinenze dell'appartamento a cui sono intestati.
-  let unitaList: Unita[] = [];
+  // Chi gestisce il condominio sceglie fra tutti gli appartamenti; un
+  // condomino fra i suoi, che possono essere più d'uno. Box, cantine e posti
+  // auto compaiono come pertinenze.
+  let unitaList: Unita[];
   if (role === "admin") {
     const { data } = await supabase
       .from("unita")
@@ -61,13 +62,12 @@ export default async function AppartamentoPage({
       .eq("tipologia", "appartamento")
       .order("interno");
     unitaList = (data ?? []) as Unita[];
+  } else {
+    unitaList = mieUnita.filter((u) => u.tipologia === "appartamento");
   }
 
   const params = await searchParams;
-  const unitaSelezionata =
-    role === "resident"
-      ? ownUnita!
-      : (unitaList.find((u) => u.id === params.unitaId) ?? unitaList[0]);
+  const unitaSelezionata = unitaList.find((u) => u.id === params.unitaId) ?? unitaList[0];
 
   if (!unitaSelezionata) {
     return <p className="text-sm text-muted-foreground">Nessuna unità disponibile.</p>;
@@ -109,7 +109,18 @@ export default async function AppartamentoPage({
     .sort((a, b) => a - b);
 
   const scomposizione = quota ? scomponiQuota(quota) : null;
-  const pertinenze = quota ? pertinenzeDi(quota, tutteLeQuote) : [];
+  // Le pertinenze di un condomino sono le unità a cui è collegato davvero. Per
+  // chi gestisce, o per un condomino senza pertinenze collegate, restano quelle
+  // intestate allo stesso nome nel rendiconto, e la pagina lo dice.
+  const pertinenzeMie = role === "resident" ? mieUnita.filter((u) => u.tipologia !== "appartamento") : [];
+  const pertinenzeCollegate = pertinenzeMie.length > 0;
+  const pertinenze = !quota
+    ? []
+    : pertinenzeCollegate
+      ? tutteLeQuote.filter(
+          (q) => q.anno === quota.anno && pertinenzeMie.some((u) => u.id === q.unita_id)
+        )
+      : pertinenzeDi(quota, tutteLeQuote);
   const totalePertinenze = pertinenze.reduce((t, q) => t + q.totale, 0);
   const millesimiGenerali = quota?.millesimi["Millesimi Generali"] ?? unitaSelezionata.millesimi;
 
@@ -130,7 +141,7 @@ export default async function AppartamentoPage({
           {anni.length > 1 && quota && (
             <AnnoSelector anni={anni} selezionato={quota.anno} base="/dashboard/appartamento" />
           )}
-          {role === "admin" && unitaList.length > 0 && (
+          {unitaList.length > 1 && (
             <UnitSelector unita={unitaList} selectedId={unitaSelezionata.id} />
           )}
         </div>
@@ -216,7 +227,9 @@ export default async function AppartamentoPage({
             <Card>
               <CardHeader className="flex-row items-center justify-between">
                 <CardTitle className="text-base">
-                  Altre unità a nome di {quota.nome_nel_documento}
+                  {pertinenzeCollegate
+                    ? "Le tue altre unità"
+                    : `Altre unità a nome di ${quota.nome_nel_documento}`}
                 </CardTitle>
                 <span className="text-sm font-medium text-muted-foreground tabular-nums">
                   Con l&apos;appartamento: {formatEuro(quota.totale + totalePertinenze)}
@@ -233,9 +246,11 @@ export default async function AppartamentoPage({
                     </li>
                   ))}
                 </ul>
-                <p className="text-xs text-muted-foreground">
-                  Collegate per nome, come le intesta l&apos;amministratore nello stesso rendiconto.
-                </p>
+                {!pertinenzeCollegate && (
+                  <p className="text-xs text-muted-foreground">
+                    Collegate per nome, come le intesta l&apos;amministratore nello stesso rendiconto.
+                  </p>
+                )}
               </CardContent>
             </Card>
           )}

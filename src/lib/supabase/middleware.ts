@@ -1,6 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { COOKIE_CONDOMINIO } from "@/lib/appartenenza";
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
@@ -44,40 +46,30 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (user && isProtected) {
-    const { data: unita } = await supabase
-      .from("unita")
-      .select("id")
+    // L'appartenenza sta in membri, e un utente può averne più d'una. Il
+    // ruolo che conta è quello nel condominio che sta guardando: si può
+    // gestire il proprio condominio ed essere condomino in un altro.
+    const { data: appartenenze } = await supabase
+      .from("membri")
+      .select("condominium_id, ruolo")
       .eq("user_id", user.id)
-      .maybeSingle();
+      .order("created_at", { ascending: true });
 
-    const { data: condominium } = await supabase
-      .from("condominiums")
-      .select("id")
-      .eq("owner_id", user.id)
-      .maybeSingle();
+    const scelto = request.cookies.get(COOKIE_CONDOMINIO)?.value;
+    const attiva =
+      (appartenenze ?? []).find((a) => a.condominium_id === scelto) ?? appartenenze?.[0];
 
-    const hasCondominium = Boolean(condominium) || Boolean(unita);
-
-    if (pathname.startsWith("/onboarding") && hasCondominium) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/dashboard";
-      return NextResponse.redirect(url);
-    }
-
-    if (pathname.startsWith("/dashboard") && !hasCondominium) {
+    // L'onboarding resta raggiungibile anche per chi ha già un condominio:
+    // è da lì che se ne registra un secondo.
+    if (pathname.startsWith("/dashboard") && !attiva) {
       const url = request.nextUrl.clone();
       url.pathname = "/onboarding";
       return NextResponse.redirect(url);
     }
 
-    if (pathname.startsWith("/dashboard") && unita && !condominium) {
+    if (pathname.startsWith("/dashboard") && attiva?.ruolo === "resident") {
       // Il condomino può accedere solo alla propria vista appartamento
-      if (pathname !== "/dashboard/appartamento" && pathname !== "/dashboard") {
-        const url = request.nextUrl.clone();
-        url.pathname = "/dashboard/appartamento";
-        return NextResponse.redirect(url);
-      }
-      if (pathname === "/dashboard") {
+      if (pathname !== "/dashboard/appartamento") {
         const url = request.nextUrl.clone();
         url.pathname = "/dashboard/appartamento";
         return NextResponse.redirect(url);

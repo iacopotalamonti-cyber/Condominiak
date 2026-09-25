@@ -1,18 +1,34 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
-import type { Condominium, Unita } from "@/lib/types";
+import {
+  COOKIE_CONDOMINIO,
+  appartenenzeDi,
+  condominioAttivo,
+  unitaDi,
+  type Appartenenza,
+} from "@/lib/appartenenza";
+import type { Condominium, Role, Unita } from "@/lib/types";
 
 export interface DashboardContext {
   userId: string;
-  role: "admin" | "resident";
+  /** Il ruolo nel condominio che l'utente sta guardando. */
+  role: Role;
   condominium: Condominium;
-  unita: Unita | null; // valorizzato solo per il resident
+  /** Tutti i condomini dell'utente, per poter passare dall'uno all'altro. */
+  condomini: Appartenenza[];
+  /** Le unità dell'utente nel condominio attivo: appartamento, box, cantina. */
+  unita: Unita[];
 }
 
-// Recupera contesto condominio+ruolo per l'utente corrente. Da chiamare in
-// ogni Server Component sotto /dashboard: il middleware garantisce già che
-// l'utente sia autenticato e abbia un condominio/unità associati.
+// Recupera contesto condominio e ruolo per l'utente corrente. Da chiamare in
+// ogni Server Component sotto /dashboard.
+//
+// Prima leggeva il condominio e l'unità dell'utente aspettandosene una riga
+// ciascuno: chi aveva due appartamenti, o un appartamento e un box, veniva
+// rimandato all'onboarding. Ora un utente può appartenere a più condomini e
+// avere più unità in ciascuno.
 export async function getDashboardContext(): Promise<DashboardContext> {
   const supabase = await createClient();
   const {
@@ -21,26 +37,17 @@ export async function getDashboardContext(): Promise<DashboardContext> {
 
   if (!user) redirect("/login");
 
-  const { data: ownedCondominium } = await supabase
-    .from("condominiums")
-    .select("*")
-    .eq("owner_id", user.id)
-    .maybeSingle();
+  const condomini = await appartenenzeDi(supabase, user.id);
+  const scelto = (await cookies()).get(COOKIE_CONDOMINIO)?.value;
+  const attivo = condominioAttivo(condomini, scelto);
 
-  if (ownedCondominium) {
-    return { userId: user.id, role: "admin", condominium: ownedCondominium, unita: null };
-  }
+  if (!attivo) redirect("/onboarding");
 
-  const { data: unita } = await supabase
-    .from("unita")
-    .select("*, condominiums(*)")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  if (unita && unita.condominiums) {
-    const { condominiums, ...unitaRest } = unita as Unita & { condominiums: Condominium };
-    return { userId: user.id, role: "resident", condominium: condominiums, unita: unitaRest };
-  }
-
-  redirect("/onboarding");
+  return {
+    userId: user.id,
+    role: attivo.ruolo,
+    condominium: attivo.condominium,
+    condomini,
+    unita: await unitaDi(supabase, user.id, attivo.condominium.id),
+  };
 }

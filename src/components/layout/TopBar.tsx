@@ -5,15 +5,18 @@ import { LogOut } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
 import { MenuMobile } from "@/components/layout/MenuMobile";
+import { CondominioSelector } from "@/components/layout/CondominioSelector";
 import { Button } from "@/components/ui/button";
+import type { Appartenenza } from "@/lib/appartenenza";
 import type { Condominium } from "@/lib/types";
 
 interface TopBarProps {
   condominium: Condominium;
   role: "admin" | "resident";
+  condomini: Appartenenza[];
 }
 
-export function TopBar({ condominium, role }: TopBarProps) {
+export function TopBar({ condominium, role, condomini }: TopBarProps) {
   const router = useRouter();
 
   async function handleLogout() {
@@ -36,10 +39,13 @@ export function TopBar({ condominium, role }: TopBarProps) {
           </p>
         </div>
       </div>
-      <Button variant="ghost" size="sm" onClick={handleLogout}>
-        <LogOut className="size-4" />
-        Esci
-      </Button>
+      <div className="flex items-center gap-2">
+        <CondominioSelector condomini={condomini} attivo={condominium.id} />
+        <Button variant="ghost" size="sm" onClick={handleLogout}>
+          <LogOut className="size-4" />
+          Esci
+        </Button>
+      </div>
     </header>
   );
 }

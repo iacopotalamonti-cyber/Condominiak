@@ -7,6 +7,7 @@ import { righeMovimenti } from "@/lib/movimenti";
 import { chiaveFornitore } from "@/lib/fornitori";
 import { risolviFornitori } from "@/lib/fornitori-server";
 import { collegaQuote, quoteValide } from "@/lib/quote";
+import { eAdmin } from "@/lib/appartenenza";
 import type { ExtractedMovimento, IncassoEstratto, FonteSalvata, Unita } from "@/lib/types";
 
 interface SaveBilancioBody {
@@ -89,20 +90,14 @@ export async function POST(req: NextRequest) {
 
     const supabase = createServiceRoleClient();
 
-    // Il condominiumId arriva dal client: va verificato che sia davvero di chi
-    // sta scrivendo, perché da qui in poi si usa la service role key.
-    const { data: condominium } = await supabase
-      .from("condominiums")
-      .select("id")
-      .eq("id", body.condominiumId)
-      .eq("owner_id", user.id)
-      .maybeSingle();
-
-    if (!condominium) {
+    // Il condominiumId arriva dal client: va verificato che chi scrive
+    // gestisca davvero quel condominio, perché da qui in poi si usa la service
+    // role key. Non basta averlo registrato: conta essere fra i suoi admin.
+    if (!(await eAdmin(supabase, user.id, body.condominiumId))) {
       return NextResponse.json({ success: false, error: "Non autorizzato" }, { status: 403 });
     }
 
-    const condominiumId = condominium.id as string;
+    const condominiumId = body.condominiumId;
     const prev = importo(body.prev);
     const cons = importo(body.cons);
     const fondo = importo(body.fondo);
@@ -328,14 +323,7 @@ export async function DELETE(req: NextRequest) {
     // Stessa verifica del salvataggio: da qui in poi si usa la service role
     // key, che passa sopra a ogni permesso, quindi il condominio va dimostrato
     // di chi sta cancellando.
-    const { data: condominium } = await supabase
-      .from("condominiums")
-      .select("id")
-      .eq("id", condominiumId)
-      .eq("owner_id", user.id)
-      .maybeSingle();
-
-    if (!condominium) {
+    if (!(await eAdmin(supabase, user.id, condominiumId))) {
       return NextResponse.json({ success: false, error: "Non autorizzato" }, { status: 403 });
     }
 
@@ -346,7 +334,7 @@ export async function DELETE(req: NextRequest) {
       const { error } = await supabase
         .from(tabella)
         .delete()
-        .eq("condominium_id", condominium.id)
+        .eq("condominium_id", condominiumId)
         .eq("anno", anno);
       if (error) throw error;
     }
