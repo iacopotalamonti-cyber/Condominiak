@@ -45,6 +45,30 @@ export function indiceFornitori(fornitori: Fornitore[]): Map<string, Fornitore> 
   return indice;
 }
 
+// Sotto questa lunghezza un nome troncato somiglia a troppi altri: "Hera" è
+// l'inizio di "Hera Gas" e di "Hera acqua", che sono due fornitori.
+const LUNGHEZZA_MINIMA_TRONCATO = 20;
+
+/**
+ * Il fornitore dell'anagrafica per un nome letto nel documento.
+ *
+ * Prima per chiave esatta. Poi, per i nomi lunghi, per inizio: il PDF taglia
+ * il nome alla larghezza della colonna ("S.G Service snc di Sturba Leon" per
+ * "S.G Service snc di Sturba Leonardo e Gabrielli Paolo"), e senza questo il
+ * ricaricamento del 2024-2025 creava due fornitori doppi. Solo se l'inizio
+ * individua un fornitore e uno solo.
+ */
+export function trovaFornitore(indice: Map<string, Fornitore>, chiave: string): Fornitore | undefined {
+  const esatto = indice.get(chiave);
+  if (esatto || chiave.length < LUNGHEZZA_MINIMA_TRONCATO) return esatto;
+
+  const candidati = new Set<Fornitore>();
+  for (const [altra, fornitore] of indice) {
+    if (altra.startsWith(chiave)) candidati.add(fornitore);
+  }
+  return candidati.size === 1 ? [...candidati][0] : undefined;
+}
+
 export interface TotaleFornitore {
   id: string | null;
   nome: string;

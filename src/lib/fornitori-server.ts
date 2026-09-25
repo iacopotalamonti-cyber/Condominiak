@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { chiaveFornitore, indiceFornitori, nomeLeggibile } from "./fornitori";
+import { chiaveFornitore, indiceFornitori, nomeLeggibile, trovaFornitore } from "./fornitori";
 import type { Fornitore } from "./types";
 
 // Trasforma i nomi letti nei documenti in righe di anagrafica: quelli già noti
@@ -36,7 +36,7 @@ export async function risolviFornitori(
   const mancanti: { condominium_id: string; nome: string }[] = [];
 
   for (const [chiave, nome] of daCreare) {
-    const trovato = esistenti.get(chiave);
+    const trovato = trovaFornitore(esistenti, chiave);
     if (trovato) mappa.set(chiave, trovato.id);
     else mancanti.push({ condominium_id: condominiumId, nome });
   }
@@ -66,7 +66,7 @@ export async function risolviFornitori(
 
   const aggiornato = indiceFornitori((rilettura ?? []) as Fornitore[]);
   for (const chiave of daCreare.keys()) {
-    const trovato = aggiornato.get(chiave);
+    const trovato = trovaFornitore(aggiornato, chiave);
     if (trovato) mappa.set(chiave, trovato.id);
   }
 

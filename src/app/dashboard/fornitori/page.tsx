@@ -42,8 +42,7 @@ export default async function FornitoriPage({
   const { data: datiBilanci } = await supabase
     .from("bilanci")
     .select("anno, documento_path")
-    .eq("condominium_id", condominium.id)
-    .not("documento_path", "is", null);
+    .eq("condominium_id", condominium.id);
 
   const archiviati = await documentiArchiviati(
     condominium.id,
@@ -52,12 +51,18 @@ export default async function FornitoriPage({
 
   const movimenti = (data ?? []) as Movimento[];
   const anagrafica = (datiFornitori ?? []) as Fornitore[];
-  const anni = Array.from(new Set(movimenti.map((m) => m.anno))).sort((a, b) => b - a);
+  const decrescente = (a: number, b: number) => b - a;
+  const anniConMovimenti = Array.from(new Set(movimenti.map((m) => m.anno))).sort(decrescente);
+  // Nel selettore ci sono tutti gli esercizi in archivio, non solo quelli con
+  // i movimenti: con un anno solo il filtro sembrava non fare niente, e degli
+  // altri anni non si capiva che mancavano.
+  const anni = Array.from(
+    new Set([...anniConMovimenti, ...(datiBilanci ?? []).map((b) => b.anno as number)])
+  ).sort(decrescente);
 
   const { anno: annoParam } = await searchParams;
   const annoRichiesto = Number(annoParam);
-  const filtraPerAnno = anni.includes(annoRichiesto);
-  const selezione = filtraPerAnno ? annoRichiesto : anni[0];
+  const selezione = anni.includes(annoRichiesto) ? annoRichiesto : (anniConMovimenti[0] ?? anni[0]);
 
   // Senza un anno valido nell'URL si mostra l'anno più recente; "tutti" resta
   // una scelta esplicita.
@@ -102,9 +107,20 @@ export default async function FornitoriPage({
               <EstraiFornitori
                 condominiumId={condominium.id}
                 archiviati={archiviati}
-                anniConDati={anni}
+                anniConDati={anniConMovimenti}
               />
             )}
+          </CardContent>
+        </Card>
+      ) : visibili.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-start gap-2 py-10 text-sm text-muted-foreground">
+            <p className="font-medium text-foreground">Per il {selezione} non ci sono ancora movimenti.</p>
+            <p>
+              I totali per categoria di questo esercizio ci sono; il dettaglio per fornitore si
+              ricava dalle righe del rendiconto. Si ottiene ricaricando il documento da Analisi
+              spese, o rileggendolo qui sotto se è già in archivio.
+            </p>
           </CardContent>
         </Card>
       ) : (
@@ -206,7 +222,7 @@ export default async function FornitoriPage({
             <EstraiFornitori
               condominiumId={condominium.id}
               archiviati={archiviati}
-              anniConDati={anni}
+              anniConDati={anniConMovimenti}
             />
           </CardContent>
         </Card>
