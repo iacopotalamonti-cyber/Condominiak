@@ -1,4 +1,5 @@
--- Come tornare a prima di 20260923110000_quote_tre_esercizi.sql.
+-- Come tornare a prima di supabase/dati/20260923_enriques3_quote_tre_esercizi.sql
+-- (applicata in produzione come migrazione 20260923110000_quote_tre_esercizi).
 --
 -- Non è una migrazione e non si applica da sola: sta qui perché ogni
 -- cambiamento ai dati deve avere scritto, prima di essere fatto, il modo di
@@ -10,10 +11,13 @@
 -- ci sono quelli di prima, fotografati dal database il 23/09/2026 prima di
 -- applicarla.
 
-delete from public.quote_unita where anno in (2023, 2024, 2025);
+-- Ogni istruzione nomina il condominio: prima qui c'era "limit 1", e la prima
+-- riga cancellava le quote di quegli anni in tutti i condomini.
+delete from public.quote_unita
+where condominium_id = 'f0b9dfd6-8b20-460a-8b2c-86176f06caa9' and anno in (2023, 2024, 2025);
 
 delete from public.unita
-where condominium_id = (select id from public.condominiums limit 1)
+where condominium_id = 'f0b9dfd6-8b20-460a-8b2c-86176f06caa9'
   and tipologia <> 'appartamento';
 
 update public.unita as u

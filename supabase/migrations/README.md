@@ -14,3 +14,10 @@ Supabase del condominio. Due modi equivalenti:
 
 Sono scritte per essere rieseguibili senza danno (`add column if not exists`):
 lanciarle due volte non rompe nulla.
+
+Una migrazione è schema: tabelle, colonne, indici, policy, permessi. Può
+trasformare i dati che ci sono in modo generale (per tutti i condomini, a
+partire dalle loro colonne), ma non contiene mai i dati di un condominio: quelli
+vanno in `supabase/dati/`, dove ogni file è ancorato al proprio condominio.
+Un test in CI lo verifica.
+
