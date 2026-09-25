@@ -6,6 +6,8 @@ impostazioni, e lì non hanno storia.
 
 Si incollano in Supabase → Authentication → Emails (Templates), su **tutti e due**
 i progetti (produzione e staging). Oggetto e corpo sono in testa a ogni file.
+Supabase lascia modificare i testi solo dopo aver configurato un SMTP proprio:
+prima il mittente, poi i testi.
 
 | File | Modello Supabase | Quando parte |
 | --- | --- | --- |
