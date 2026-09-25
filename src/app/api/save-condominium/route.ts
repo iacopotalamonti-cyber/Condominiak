@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
@@ -13,6 +14,7 @@ import { CATEGORIE_SPESA_LABEL } from "@/lib/calcoli";
 import { righeMovimenti } from "@/lib/movimenti";
 import { chiaveFornitore } from "@/lib/fornitori";
 import { risolviFornitori } from "@/lib/fornitori-server";
+import { COOKIE_CONDOMINIO } from "@/lib/appartenenza";
 
 interface SaveCondominiumBody {
   info: ExtractedInfo;
@@ -82,6 +84,14 @@ export async function POST(req: NextRequest) {
     }
 
     const condominiumId = condominium.id as string;
+
+    // Chi registra il condominio ne diventa admin. owner_id lo ricorda, ma è
+    // membri a decidere chi vede e chi scrive: senza questa riga, chi ha
+    // appena creato il condominio non potrebbe aprirlo.
+    const { error: membroErr } = await supabase
+      .from("membri")
+      .insert({ condominium_id: condominiumId, user_id: user.id, ruolo: "admin" });
+    if (membroErr) throw membroErr;
 
     // 2. unita (bulk)
     let insertedUnita: { id: string; interno: number }[] = [];
@@ -224,6 +234,25 @@ export async function POST(req: NextRequest) {
       const { error } = await supabase.from("pagamenti").insert(pagamentiRows);
       if (error) throw error;
     }
+
+    // Chi ha già un condominio e ne registra un altro deve ritrovarsi in quello
+
+    // nuovo, non nel primo.
+
+    (await cookies()).set(COOKIE_CONDOMINIO, condominiumId, {
+
+      httpOnly: true,
+
+      sameSite: "lax",
+
+      secure: process.env.NODE_ENV === "production",
+
+      maxAge: 60 * 60 * 24 * 365,
+
+      path: "/",
+
+    });
+
 
     return NextResponse.json({ success: true, condominiumId });
   } catch (error) {
