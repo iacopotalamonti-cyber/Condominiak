@@ -64,6 +64,12 @@ di cui vuoi **cambiare** o **estendere** il comportamento.
    consultare i documenti contabili (art. 1130-bis c.c.), ma mostrare le
    morosità altrui dentro un'app va deciso con attenzione. Chi vede cosa è una
    scelta di prodotto, non un dettaglio tecnico.
+5. **Anche il marketing pubblico si rivolge al condòmino, non
+   all'amministratore.** La pagina vetrina e il posizionamento SEO
+   (`ROADMAP.md` → "La pagina che vende il prodotto") vanno scritti con le
+   parole di chi vive nel condominio — le quattro frasi di questo file — non
+   con quelle di un gestionale per professionisti: è lo stesso scarto già
+   fatto per il cliente pagante.
 
 ### Chi vede cosa (risposta del 19/09/2026)
 

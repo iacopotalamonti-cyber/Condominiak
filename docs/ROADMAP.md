@@ -99,6 +99,16 @@ produce gli stessi numeri. È la prova che manca.
       chiedere in assemblea", "quanto spendo per l'acqua"
 - [ ] Il prezzo non è ancora deciso (Fase 3): la pagina può esistere prima, ma
       senza cifra o con una richiesta di contatto
+- [ ] **Copy e keyword SEO parlano al condòmino/consigliere, non
+      all'amministratore**: `DECISIONI.md` ha scartato l'amministratore
+      professionista come cliente pagante (19/09/2026). Parole chiave come
+      "gestionale condominiale" o "software per amministratori" portano il
+      pubblico che il prodotto non serve
+- [ ] Blog e contenuti SEO vengono **dopo** la Fase 1 bis (invito che collega
+      davvero qualcuno) e la privacy policy di Fase 2: portare traffico
+      organico verso un'iscrizione che oggi non collega nessuno, o senza
+      un'informativa sui dati dei condòmini, crea più rischio di quanto
+      traffico vale
 
 ### 3. Rifare la dashboard
 
@@ -190,6 +200,10 @@ quel cliente per smettere di usare il suo strumento attuale, niente altro.
       legale dell'impianto "chi vede cosa" descritto in `SERVIZI.md` — prima del
       primo condominio che non è il nostro
 - [ ] Test end-to-end (Playwright) sul percorso completo: registrazione → onboarding → dashboard
+- [ ] Metriche di base (traffico, utenti attivi, MRR se si fa pagare): servono
+      a preparare la vendita del SaaS, ma solo da qui in poi — un numero di
+      traffico senza utenti reali che restano agganciati non dice niente a un
+      compratore, finché l'invito della Fase 1 bis non collega nessuno
 
 **Fatto quando**: un amministratore vero ci lavora sopra per un mese senza tornare indietro.
 
