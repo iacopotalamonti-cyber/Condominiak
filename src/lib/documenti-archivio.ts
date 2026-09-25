@@ -1,18 +1,6 @@
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { BUCKET, cartellaArchivio, nomeFile } from "@/lib/percorsi";
 import type { DocumentoArchiviato } from "@/lib/types";
-
-export const BUCKET = "documenti-condominiali";
-
-// I documenti analizzati vengono spostati qui e ci restano: la provenienza di
-// un importo serve a poco se il documento a cui rimanda è sparito.
-const CARTELLA_ARCHIVIO = "documenti";
-
-const PREFISSO_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-/i;
-
-export function nomeFile(path: string): string {
-  const base = path.split("/").pop() ?? path;
-  return base.replace(PREFISSO_UUID, "");
-}
 
 interface RigaBilancio {
   anno: number;
@@ -28,15 +16,15 @@ interface RigaBilancio {
  * rendiconto 2023-2024 è diventato irraggiungibile quando il 2024-2025 ha
  * preso il suo stesso anno.
  *
- * La cartella è `documenti/{utente}/`, che nessuna policy di Storage copre —
- * si legge quindi con la service role key, restringendo alla cartella di chi
- * sta guardando, come fa la rotta che firma i link.
+ * La cartella è `{condominio}/documenti/`: l'archivio è del condominio, non
+ * di chi ha caricato i file, così lo vede ogni suo amministratore. Si legge
+ * con la service role key; chi chiama ha già verificato di esserne admin.
  */
 export async function documentiArchiviati(
-  userId: string,
+  condominiumId: string,
   bilanci: RigaBilancio[]
 ): Promise<DocumentoArchiviato[]> {
-  const cartella = `${CARTELLA_ARCHIVIO}/${userId}`;
+  const cartella = cartellaArchivio(condominiumId);
   const supabase = createServiceRoleClient();
 
   const { data, error } = await supabase.storage.from(BUCKET).list(cartella, {

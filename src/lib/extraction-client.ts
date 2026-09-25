@@ -2,7 +2,9 @@ import { createClient } from "@/lib/supabase/client";
 import type { ExtractionMode } from "@/lib/anthropic";
 import type { ExtractionResult, UploadedFile } from "@/lib/types";
 
-export const BUCKET = "documenti-condominiali";
+import { BUCKET } from "@/lib/percorsi";
+
+export { BUCKET };
 export const TIPI_ACCETTATI = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
 
 const POLL_INTERVAL_MS = 3000;
@@ -37,12 +39,23 @@ export async function analizzaDocumenti(
 ): Promise<ExtractionResult> {
   const jobId = crypto.randomUUID();
 
+  // La funzione non vede i cookie di sessione come le rotte di Next: chi
+  // chiede l'analisi si presenta con il proprio token, e la funzione verifica
+  // che i file siano suoi o del condominio che amministra.
+  const {
+    data: { session },
+  } = await createClient().auth.getSession();
+  if (!session) throw new Error("Sessione scaduta, ricarica la pagina");
+
   // Chiamata diretta dal browser alla Background Function: evitiamo che una
   // funzione serverless ne chiami un'altra internamente (chiamata
   // funzione-a-funzione, inaffidabile nel sandbox di Netlify).
   const startRes = await fetch("/.netlify/functions/extract-background", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.access_token}`,
+    },
     body: JSON.stringify({ jobId, files, mode }),
   });
   if (!startRes.ok) throw new Error(`Avvio elaborazione fallito (status ${startRes.status})`);

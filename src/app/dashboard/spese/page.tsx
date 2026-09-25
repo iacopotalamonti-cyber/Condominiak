@@ -16,7 +16,7 @@ export default async function SpesePage({
 }: {
   searchParams: Promise<{ anno?: string }>;
 }) {
-  const { role, condominium, userId } = await getDashboardContext();
+  const { role, condominium } = await getDashboardContext();
   const supabase = await createClient();
   const annoCorrente = new Date().getFullYear();
 
@@ -43,7 +43,7 @@ export default async function SpesePage({
 
   // I documenti caricati in passato restano in archivio: rileggerli non
   // richiede di ricaricarli, e serve quando l'estrazione è migliorata.
-  const archiviati = await documentiArchiviati(userId, bilanci);
+  const archiviati = await documentiArchiviati(condominium.id, bilanci);
 
   const { anno: annoParam } = await searchParams;
   const annoRichiesto = Number(annoParam);
@@ -188,7 +188,3 @@ export default async function SpesePage({
     </div>
   );
 }
-
-// I file in storage sono salvati come "<prefisso>/<utente>/<uuid>-<nome vero>":
-// all'amministratore va mostrato il nome che ha caricato lui. Il prefisso è un
-// UUID, che contiene trattini: va tolto per intero, non fino al primo trattino.

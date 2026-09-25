@@ -1,17 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { condominiDi } from "@/lib/appartenenza";
+import { BUCKET, puoLeggere } from "@/lib/percorsi";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 
-const BUCKET = "documenti-condominiali";
 const DURATA_LINK_S = 300;
 
-// Il percorso dei documenti è `<prefisso>/<userId>/<file>`: l'utente può
-// firmare solo quelli sotto la propria cartella.
-function appartieneA(path: string, userId: string): boolean {
-  const segmenti = path.split("/");
-  return segmenti.length >= 3 && segmenti[1] === userId;
-}
-
+// Un documento del condominio lo apre chi ne è membro, amministratore o
+// condomino: è lo stesso rendiconto che l'amministratore di condominio deve
+// comunque mettere a disposizione. Un file appena caricato, e non ancora
+// salvato nei dati di nessun condominio, solo chi l'ha caricato.
 export async function GET(req: NextRequest) {
   const path = req.nextUrl.searchParams.get("path");
   if (!path) {
@@ -27,11 +25,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ success: false, error: "Non autenticato" }, { status: 401 });
   }
 
-  if (!appartieneA(path, user.id)) {
+  const supabase = createServiceRoleClient();
+  const { membro } = await condominiDi(supabase, user.id);
+
+  if (!puoLeggere(path, user.id, membro)) {
     return NextResponse.json({ success: false, error: "Non autorizzato" }, { status: 403 });
   }
 
-  const supabase = createServiceRoleClient();
   const { data, error } = await supabase.storage
     .from(BUCKET)
     .createSignedUrl(path, DURATA_LINK_S);

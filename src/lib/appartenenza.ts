@@ -103,3 +103,22 @@ export async function eAdmin(
 
   return data?.ruolo === "admin";
 }
+
+/** Gli id dei condomini dell'utente: tutti, e quelli che amministra. */
+export async function condominiDi(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<{ membro: string[]; admin: string[] }> {
+  const { data, error } = await supabase
+    .from("membri")
+    .select("condominium_id, ruolo")
+    .eq("user_id", userId);
+
+  if (error) throw error;
+
+  const righe = (data ?? []) as { condominium_id: string; ruolo: Role }[];
+  return {
+    membro: righe.map((r) => r.condominium_id),
+    admin: righe.filter((r) => r.ruolo === "admin").map((r) => r.condominium_id),
+  };
+}

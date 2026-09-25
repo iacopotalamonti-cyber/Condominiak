@@ -35,13 +35,12 @@ import {
   type RendicontoLetto,
 } from "../../src/lib/lettura";
 import type { ExtractedBilancio, ExtractionResult, UploadedFile } from "../../src/lib/types";
+import { condominiDi } from "../../src/lib/appartenenza";
+import { BUCKET, eUuid, puoEstrarre } from "../../src/lib/percorsi";
 
-const BUCKET = "documenti-condominiali";
-
-// I documenti caricati per l'estrazione restano consultabili: senza il PDF
-// accanto al numero non c'è modo di verificare da dove arriva.
-const PREFISSO_TEMPORANEO = "pending/";
-const PREFISSO_ARCHIVIO = "documenti/";
+// Un rendiconto per esercizio, qualche anno alla volta: oltre è un errore o
+// un abuso, e ogni file è una o più chiamate al modello.
+const MAX_FILE = 12;
 
 // Le Background Function hanno 15 minuti: ci fermiamo prima per avere il tempo
 // di salvare i risultati parziali invece di essere uccisi a metà lavoro.
@@ -417,11 +416,21 @@ function riepilogoControlli(bilanci: ExtractedBilancio[]): string {
 // Nota: in questo formato di funzione Netlify le variabili d'ambiente NON
 // arrivano affidabilmente via process.env — vanno lette con Netlify.env.get.
 export default async (req: Request) => {
-  const { jobId, files, mode = "condominio" } = (await req.json()) as {
-    jobId: string;
-    files: UploadedFile[];
+  const corpo = (await req.json().catch(() => null)) as {
+    jobId?: unknown;
+    files?: unknown;
     mode?: ExtractionMode;
-  };
+  } | null;
+  const jobId = typeof corpo?.jobId === "string" ? corpo.jobId : "";
+  const files = (Array.isArray(corpo?.files) ? corpo.files : []) as UploadedFile[];
+  const mode = corpo?.mode ?? "condominio";
+
+  // Una Background Function risponde 202 prima di cominciare: un rifiuto non
+  // arriva a chi chiama come stato HTTP, ma solo come esito del lavoro.
+  if (!eUuid(jobId) || !files.length || files.length > MAX_FILE || files.some((f) => typeof f?.path !== "string")) {
+    console.warn("extract-background: richiesta malformata, ignorata");
+    return;
+  }
   console.log(`extract-background invoked: jobId=${jobId}, files=${files.length}, mode=${mode}`);
   console.log(`env check: url=${Boolean(Netlify.env.get("NEXT_PUBLIC_SUPABASE_URL"))} key=${Boolean(Netlify.env.get("SUPABASE_SERVICE_ROLE_KEY"))} anthropic=${Boolean(Netlify.env.get("ANTHROPIC_API_KEY"))}`);
   // L'estrazione è il punto dove un errore resta invisibile: gira in
@@ -439,6 +448,11 @@ export default async (req: Request) => {
 
   const store = getStore("extractions");
   const deadline = Date.now() + DEADLINE_MS;
+  // Lo stato del lavoro lo legge solo chi l'ha avviato: il risultato contiene
+  // i numeri del condominio. Finché non si sa chi è, resta vuoto.
+  let proprietario: string | null = null;
+  const salva = (stato: Record<string, unknown>) =>
+    store.setJSON(jobId, { ...stato, owner: proprietario });
 
   try {
     const supabaseUrl = Netlify.env.get("NEXT_PUBLIC_SUPABASE_URL");
@@ -457,6 +471,33 @@ export default async (req: Request) => {
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
+
+    // Prima di scaricare un solo byte o spendere una chiamata al modello: chi
+    // chiede, e se quei file può farli leggere. Senza questo controllo
+    // chiunque conoscesse l'indirizzo della funzione poteva far analizzare,
+    // a spese del condominio, qualunque percorso del bucket.
+    const token = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
+    const {
+      data: { user },
+    } = token ? await supabase.auth.getUser(token) : { data: { user: null } };
+    if (!user) {
+      console.warn(`extract-background: jobId=${jobId} senza una sessione valida, ignorato`);
+      return;
+    }
+    // Il jobId lo sceglie il browser: se esiste già è di un altro lavoro, e
+    // non va sovrascritto.
+    if (await store.get(jobId)) {
+      console.warn(`extract-background: jobId=${jobId} già in uso, ignorato`);
+      return;
+    }
+    proprietario = user.id;
+
+    const { admin } = await condominiDi(supabase, user.id);
+    const vietati = files.filter((f) => !puoEstrarre(f.path, user.id, admin));
+    if (vietati.length) {
+      console.warn(`extract-background: ${user.id} ha chiesto ${vietati.length} file non suoi`);
+      throw new Error("Non puoi far analizzare questi documenti: non sono tuoi né di un condominio che amministri.");
+    }
     // L'AI Gateway di Netlify si inserisce da solo negli SDK supportati dentro
     // le funzioni e fattura l'inferenza sui crediti del piano — lo stesso monte
     // che paga l'hosting. È già successo: 6,15 $ di inferenza sono costati
@@ -543,7 +584,7 @@ export default async (req: Request) => {
         break;
       }
 
-      await store.setJSON(jobId, {
+      await salva({
         status: "running",
         progress: { fatti: index, totale: pieces.length, documento: label(piece) },
       });
@@ -623,7 +664,7 @@ export default async (req: Request) => {
     const riletture: ExtractionResult[] = [];
     for (const bilancio of daRileggere.slice(0, MAX_RILETTURE)) {
       if (Date.now() > deadline) break;
-      await store.setJSON(jobId, {
+      await salva({
         status: "running",
         progress: {
           fatti: pieces.length,
@@ -641,25 +682,10 @@ export default async (req: Request) => {
 
     if (riletture.length) extracted = mergeExtractions([...riletture, extracted]);
 
-    // I file restano archiviati: la provenienza di un importo serve a poco se
-    // il documento a cui rimanda è stato cancellato.
-    const archiviati: UploadedFile[] = [];
-    for (const file of files) {
-      const destinazione = file.path.startsWith(PREFISSO_TEMPORANEO)
-        ? PREFISSO_ARCHIVIO + file.path.slice(PREFISSO_TEMPORANEO.length)
-        : file.path;
-
-      if (destinazione !== file.path) {
-        const { error } = await supabase.storage.from(BUCKET).move(file.path, destinazione);
-        if (error) {
-          console.warn(`Archiviazione fallita per ${file.name}:`, error.message);
-          archiviati.push(file);
-          continue;
-        }
-      }
-      archiviati.push({ ...file, path: destinazione });
-    }
-    extracted.documenti = archiviati;
+    // I file restano dove sono stati caricati: entrano nell'archivio del
+    // condominio quando i loro numeri vengono salvati, non prima. Un'analisi
+    // abbandonata non lascia niente nell'archivio.
+    extracted.documenti = files;
 
     const problemi = riepilogoControlli(extracted.bilanci);
     extracted.note = [
@@ -678,7 +704,7 @@ export default async (req: Request) => {
         (letture.length ? `, ${letture.length} documenti letti senza modello` : "")
     );
 
-    await store.setJSON(jobId, { status: "done", data: extracted });
+    await salva({ status: "done", data: extracted });
   } catch (error) {
     console.error("Background extraction error:", error);
     // Il jobId permette di ritrovare nei log della funzione l'estrazione
@@ -686,6 +712,6 @@ export default async (req: Request) => {
     Sentry.captureException(error, { tags: { jobId, mode } });
     // La funzione termina subito dopo: senza flush l'evento non parte.
     await Sentry.flush(2000).catch(() => {});
-    await store.setJSON(jobId, { status: "error", error: messageOf(error) });
+    await salva({ status: "error", error: messageOf(error) });
   }
 };

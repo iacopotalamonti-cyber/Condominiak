@@ -15,6 +15,8 @@ import { righeMovimenti } from "@/lib/movimenti";
 import { chiaveFornitore } from "@/lib/fornitori";
 import { risolviFornitori } from "@/lib/fornitori-server";
 import { COOKIE_CONDOMINIO } from "@/lib/appartenenza";
+import { archiviaTutti } from "@/lib/archivio";
+import { BUCKET } from "@/lib/percorsi";
 
 interface SaveCondominiumBody {
   info: ExtractedInfo;
@@ -111,9 +113,21 @@ export async function POST(req: NextRequest) {
       insertedUnita = data ?? [];
     }
 
-    // 3. bilanci (bulk, solo anni con dati) con la provenienza dei totali
-    const percorsoDi = (nome: string) =>
-      documenti?.find((d) => d.name === nome)?.path ?? null;
+    // 3. I documenti letti passano dalla cartella di chi li ha caricati a
+    //    quella del condominio: da qui in poi sono dei suoi membri.
+    const caricati = Array.isArray(documenti) ? documenti : [];
+    const archiviati = await archiviaTutti(
+      supabase.storage.from(BUCKET),
+      caricati,
+      user.id,
+      condominiumId
+    );
+    const percorsoDi = (nome: string) => {
+      const doc = caricati.find((d) => d.name === nome);
+      return doc ? archiviati.get(doc.path) ?? null : null;
+    };
+
+    // 3b. bilanci (bulk, solo anni con dati) con la provenienza dei totali
 
     const esercizi = (bilanci ?? []).filter((b) => b.anno > 0);
 

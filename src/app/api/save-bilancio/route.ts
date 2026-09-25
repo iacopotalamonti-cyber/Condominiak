@@ -8,6 +8,8 @@ import { chiaveFornitore } from "@/lib/fornitori";
 import { risolviFornitori } from "@/lib/fornitori-server";
 import { collegaQuote, quoteValide } from "@/lib/quote";
 import { eAdmin } from "@/lib/appartenenza";
+import { archiviaTutti } from "@/lib/archivio";
+import { BUCKET, nomeFile } from "@/lib/percorsi";
 import type { ExtractedMovimento, IncassoEstratto, FonteSalvata, Unita } from "@/lib/types";
 
 interface SaveBilancioBody {
@@ -103,8 +105,20 @@ export async function POST(req: NextRequest) {
     const fondo = importo(body.fondo);
     const totale = importo(body.totale);
     const fonti = fontiValide(body.fonti);
-    const documentoPath =
+    const percorsoCaricato =
       typeof body.documentoPath === "string" ? body.documentoPath.slice(0, 500) : null;
+    // Il documento entra nell'archivio del condominio insieme ai suoi numeri.
+    // Un percorso che non è di chi salva, o di questo condominio, non si cita.
+    const documentoPath = percorsoCaricato
+      ? ((
+          await archiviaTutti(
+            supabase.storage.from(BUCKET),
+            [{ name: nomeFile(percorsoCaricato), path: percorsoCaricato }],
+            user.id,
+            condominiumId
+          )
+        ).get(percorsoCaricato) ?? null)
+      : null;
 
     const righeSpese = Object.entries(body.spese ?? {})
       .filter(([categoria]) => categoria in CATEGORIE_SPESA_LABEL)
@@ -268,7 +282,7 @@ export async function POST(req: NextRequest) {
           importi: q.importi,
           millesimi: q.millesimi,
           totale: q.totale,
-          fonte_documento: documentoPath?.split("/").pop() ?? null,
+          fonte_documento: documentoPath ? nomeFile(documentoPath) : null,
           fonte_pagina: q.pagina || null,
           documento_path: documentoPath,
         }))
