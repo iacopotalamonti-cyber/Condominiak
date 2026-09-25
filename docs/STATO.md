@@ -28,7 +28,8 @@ tutto il codice (19/09/2026); non esistono più riferimenti a CondoTwin.
 | Servizio | Dove | Stato |
 | --- | --- | --- |
 | Registrazione / login | `src/app/login/`, `src/middleware.ts` | funzionante |
-| Recupero password | `src/app/login/`, `src/app/reset/` | funzionante — richiede gli indirizzi di ritorno elencati in Supabase |
+| Recupero password | `src/app/login/`, `src/app/reset/` | funzionante, provato il 25/09/2026 |
+| Email di accesso | Supabase Auth → SMTP di Resend, testi in `supabase/email/` | da "Condominiak <noreply@condominiak.me>", in italiano (produzione). Dominio verificato su Resend (DKIM e SPF su GoDaddy). Indirizzi di ritorno: `condominiak.me`, `www.condominiak.me`, `condominiak.netlify.app` in produzione; `*--condominiak.netlify.app` sullo staging, che usa ancora l'SMTP di prova di Supabase (manda solo ai membri del team) |
 | Invito via token | `src/app/invite/[token]/`, `src/app/api/invite-resident/`, `src/app/api/accetta-invito/`, `src/lib/inviti.ts` | funzionante — token segreto (solo l'impronta nel database), 14 giorni, uso singolo, legato all'email; accettato lato server |
 | Più condomini e più unità per persona | `src/lib/appartenenza.ts`, `src/components/layout/CondominioSelector.tsx` | funzionante — tabelle `membri` e `unita_membri`, condominio attivo scelto con un cookie |
 | Wizard di onboarding condominio | `src/app/onboarding/`, `src/components/onboarding/` | funzionante |
@@ -105,10 +106,11 @@ sono affatto:
   delibera diventa un dato.
 - **I fornitori nascono solo dall'estrazione** (`src/lib/fornitori-server.ts`):
   dall'interfaccia non se ne può aggiungere o correggere uno a mano.
-- **Lo staging esiste ma Netlify non lo usa ancora**: finché le anteprime di
-  deploy non puntano al progetto di staging, continuano a scrivere sul database
-  di produzione.
-- **Sentry è collegato ma spento finché manca il DSN su Netlify.**
+- **Le anteprime e i branch deploy usano lo staging** (verificato il 25/09/2026):
+  URL, chiave pubblica e service role dei contesti Deploy Previews e Branch
+  deploys sono quelli del progetto `shzxqeyyxjhultofwzfz`. Per entrare in
+  un'anteprima serve un account sullo staging, non quello di produzione.
+- **Sentry è acceso**: il DSN è impostato su Netlify per tutti i contesti.
 - **Il backup non è ancora stato provato con un ripristino.** Dal 20/09/2026 il
   database ha una copia giornaliera (`.github/workflows/backup.yml`), ma finché
   non se ne ripristina una su staging non sappiamo se sia utilizzabile.

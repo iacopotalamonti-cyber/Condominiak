@@ -17,8 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-
-const PASSWORD_MINIMA = 6;
+import { PASSWORD_MINIMA } from "@/lib/password";
 
 // Lo stesso stato in cui può trovarsi chi arriva qui: stiamo ancora leggendo
 // il link, il link vale, il link non vale più.

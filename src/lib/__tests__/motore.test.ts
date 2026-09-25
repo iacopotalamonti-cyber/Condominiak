@@ -234,3 +234,34 @@ test("senza numero di documento il nome non viene tagliato al posto suo", () => 
   assert.equal(movimento.fornitore, "");
   assert.equal(movimento.descrizione, "Tosiani Angelo 22/10/25");
 });
+
+test("numero di documento e data nello stesso frammento: il fornitore resta", () => {
+  // Nel 2024-2025 la riga delle accise è stampata "Agenzia delle Dogane" |
+  // "40924 04/09/24": senza riconoscere la data in coda, il nome si perdeva.
+  const attaccati = paginaTosiani([
+    INTESTAZIONE,
+    [[38, "004.003"], [72, "Oneri fiscali impianto fotovoltaico"]],
+    [[72, "Agenzia delle Dogane"], [230, "40924 04/09/24"], [326, "71,43"], [400, "71,43"]],
+  ]);
+
+  const movimento = leggi([attaccati], TOSIANI).voci[0].movimenti[0];
+  assert.equal(movimento.fornitore, "Agenzia delle Dogane");
+  assert.equal(movimento.data, "2024-09-04");
+  assert.equal(movimento.importo, 71.43);
+});
+
+test("\"Fornitori vari\" non è un fornitore", () => {
+  // È il segnaposto del gestionale per gli storni delle quote a contatore e
+  // per le spese minute: sommarli sotto un nome farebbe un fornitore da
+  // -13.570 € nel 2024-2025.
+  const storno = paginaTosiani([
+    INTESTAZIONE,
+    [[38, "300.003"], [72, "Storno quote acqua"]],
+    [[72, "Fornitori vari"], [245, "1"], [253, "30/09/25"], [308, "-2.422,38"], [385, "-2.422,38"]],
+  ]);
+
+  const movimento = leggi([storno], TOSIANI).voci[0].movimenti[0];
+  assert.equal(movimento.fornitore, "");
+  assert.equal(movimento.data, "2025-09-30");
+  assert.equal(movimento.importo, -2422.38);
+});

@@ -208,6 +208,14 @@ function motivoDiScarto(
 // La forma che l'applicazione salva
 // ---------------------------------------------------------------------------
 
+// Alcuni gestionali intitolano i conti tutti in maiuscolo ("PERSONALI"): nelle
+// pagine dell'app si legge meglio come una frase.
+function leggibile(testo: string): string {
+  const pulito = testo.trim();
+  if (!/[A-ZÀ-Ý]/.test(pulito) || pulito !== pulito.toUpperCase()) return pulito;
+  return pulito.charAt(0) + pulito.slice(1).toLowerCase();
+}
+
 function euro(valore: number): string {
   return valore.toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
@@ -293,7 +301,7 @@ export function estrazioneDa(letto: RendicontoLetto, documento: string): Extract
     movimenti: movimentiDa(letto, documento),
     totale,
     incassi: classificazione.rimborsi.map((riga) => ({
-      descrizione: riga.descrizione,
+      descrizione: leggibile(riga.descrizione),
       importo: riga.importo,
       codice: riga.codice,
       fonte: fonteDi(documento, 0, `${riga.codice} ${euro(riga.importo)}`),

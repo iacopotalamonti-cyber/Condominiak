@@ -143,6 +143,17 @@ export interface Lettura {
 // condominiale non porta fatture dell'Ottocento.
 const DATA = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})$/;
 
+// A volte il numero del documento e la data sono stampati attaccati, nello
+// stesso frammento: "40924 04/09/24". La data è comunque l'ultima cosa.
+const DATA_IN_CODA = /(?:^|\s)(\d{1,2}[/.-]\d{1,2}[/.-](?:\d{2}|\d{4}))$/;
+
+// Ciò che un gestionale scrive al posto della controparte quando non ce n'è
+// una. Non è un fornitore: raggrupparlo come tale sommerebbe fatture di ditte
+// diverse agli storni delle quote a contatore, e nel 2024-2025 farebbe
+// comparire un "fornitore" con -13.570 €. Lo stesso vale per le rettifiche
+// ("Differenza contabile", -10,13 nel 2022-2023).
+const FORNITORE_GENERICO = /^(?:fornitor[ei]\s+var[ie]|diversi|differenz[ae]\s+contabil[ei])$/i;
+
 function dataDi(testo: string): string {
   const trovato = testo.trim().match(DATA);
   if (!trovato) return "";
@@ -350,7 +361,17 @@ export function leggi(pagine: Pagina[], profilo: ProfiloFormato): Lettura {
           if (!voci.includes(corrente)) voci.push(corrente);
         } else if (indice === COLONNA_MOVIMENTO) {
           const sinistra = ordinati.filter((f) => f.x < frammento.x && importoDi(f.testo) === null);
-          const indiceData = sinistra.findIndex((f) => DATA.test(f.testo.trim()));
+          const indiceData = sinistra.findIndex((f) => DATA_IN_CODA.test(f.testo.trim()));
+          const testoData = indiceData >= 0 ? sinistra[indiceData].testo.trim() : "";
+          // Il numero di documento sta nel frammento prima della data, oppure
+          // nello stesso frammento, davanti a lei: il nome finisce prima.
+          const fineNome = indiceData < 0 ? 0 : DATA.test(testoData) ? indiceData - 1 : indiceData;
+          const nome = sinistra
+            .slice(0, fineNome)
+            .map((f) => f.testo.trim())
+            .filter(Boolean)
+            .join(" ")
+            .trim();
 
           corrente.movimenti.push({
             descrizione: sinistra
@@ -358,19 +379,11 @@ export function leggi(pagine: Pagina[], profilo: ProfiloFormato): Lettura {
               .filter(Boolean)
               .join(" ")
               .trim(),
-            // Il fornitore si stacca solo se prima della data resta qualcosa
-            // oltre al numero di documento: altrimenti si taglierebbe via il
-            // nome invece del numero.
-            fornitore:
-              profilo.fornitore && indiceData > 1
-                ? sinistra
-                    .slice(0, indiceData - 1)
-                    .map((f) => f.testo.trim())
-                    .filter(Boolean)
-                    .join(" ")
-                    .trim()
-                : "",
-            data: indiceData >= 0 ? dataDi(sinistra[indiceData].testo) : "",
+            // Il fornitore si stacca solo se prima del numero di documento
+            // resta qualcosa: altrimenti si taglierebbe via il nome invece del
+            // numero.
+            fornitore: profilo.fornitore && !FORNITORE_GENERICO.test(nome) ? nome : "",
+            data: testoData ? dataDi(testoData.match(DATA_IN_CODA)![1]) : "",
             importo: valore,
             pagina: pagina.numero,
           });

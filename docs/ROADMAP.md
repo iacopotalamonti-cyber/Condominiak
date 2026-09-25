@@ -19,12 +19,11 @@ ogni rilascio successivo.
 - [x] CI su GitHub Actions: `lint` + `test` + `build` a ogni push e PR (il lint falliva già: sistemato)
 - [x] Ambiente di staging: progetto Supabase `shzxqeyyxjhultofwzfz` ("Condominiak
       Staging", eu-west-1), con lo schema iniziale applicato e verificato identico
-      alla produzione. **Resta da fare a mano**: su Netlify, in Deploy contexts →
-      Deploy Previews, impostare le variabili Supabase dello staging, così le
-      anteprime non scrivono sul database vero
-- [x] Tracciamento errori (Sentry) su browser, server e funzione di estrazione.
-      **Resta da fare a mano**: impostare `NEXT_PUBLIC_SENTRY_DSN` su Netlify
-      (e `NEXT_PUBLIC_SENTRY_ENV`), altrimenti non parte nulla
+      alla produzione. Su Netlify le anteprime e i branch deploy puntano allo
+      staging (verificato il 25/09/2026: URL e chiavi sono del progetto di
+      staging), quindi non scrivono sul database vero
+- [x] Tracciamento errori (Sentry) su browser, server e funzioni. DSN e
+      ambiente impostati su Netlify per tutti i contesti
 - [x] CORS ristretto a `https://www.condominiak.me` (era `*`)
 - [x] Backup giornaliero del database in `.github/workflows/backup.yml`, con il
       segreto `SUPABASE_DB_URL` impostato. Prima copia prodotta il 20/09/2026.
@@ -93,9 +92,24 @@ produce gli stessi numeri. È la prova che manca.
       sei non hanno il PDF in archivio** (2020, 2021 e 2023 hanno
       `documento_path` nullo, perché furono letti fuori dall'applicazione).
       Vanno ricaricati, altrimenti la prova copre solo 2022, 2024 e 2025
-- [ ] Il confronto va fatto da un test, non a occhio: due letture dello stesso
-      documento devono dare lo stesso risultato, e questo è esattamente ciò che
-      un motore deterministico permette di verificare
+- [x] Il confronto va fatto da un test, non a occhio: `npm run
+      confronta-consuntivi -- foto.json *.pdf` rifà per ogni PDF ciò che fa
+      l'app (lettura, estrazione, righe del salvataggio, la stessa funzione
+      della rotta) e confronta voce per voce con una fotografia del database.
+      **Esito del 25/09/2026, sui sei rendiconti**: consuntivo, totale
+      stampato, spese per categoria e le 132 quote identici su tutti gli anni.
+      Le differenze rimaste sono volute: gli incassi prendono la descrizione del
+      documento invece di quella scritta a mano (stessi importi); i movimenti
+      del 2025 hanno gli stessi totali per ognuno dei 20 fornitori con nome, ma
+      la categoria segue la stessa corrispondenza delle spese e non si salvano
+      le righe delle voci le cui fatture non sommano al totale. Il ricaricamento
+      aggiungerebbe i movimenti del 2020 (59), 2023 (74) e 2024 (73). La prova
+      ha trovato e fatto correggere due errori del motore: un fornitore perso
+      quando numero e data sono nello stesso frammento, e "Fornitori vari" /
+      "Differenza contabile" trattati come fornitori
+- [ ] Il giro vero dall'interfaccia (cancella, carica, salva), anno per anno,
+      con una copia delle righe prima di ciascuno e il confronto dopo. Mette
+      anche in archivio i PDF del 2020, 2021 e 2023, che oggi mancano
 
 ### 2. La pagina che vende il prodotto
 

@@ -219,6 +219,13 @@ Scartato: usare subito una scheda che quadra. Due voci scambiate di categoria
 quadrano lo stesso, e da quel momento sbaglierebbero in silenzio su ogni
 rendiconto di quel formato.
 
+**25/09/2026 — "Fornitori vari" non è un fornitore.**
+Il gestionale Tosiani lo scrive al posto della controparte sulle spese minute
+e sugli storni delle quote a contatore; "Differenza contabile" sulle
+rettifiche. Raggruppati come un fornitore, nel 2024-2025 avrebbero fatto
+comparire un fornitore da -13.570 €. Il motore li lascia senza fornitore:
+finiscono fra i "Non attribuiti", con la loro descrizione intatta.
+
 ## Aperte
 
 **Cosa vede un condòmino che non è consigliere**, e come trattiamo i dati
