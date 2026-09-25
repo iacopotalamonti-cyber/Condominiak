@@ -12,13 +12,18 @@ import {
   Truck,
   FileText,
   Settings,
+  FileCog,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
 interface SidebarProps {
   role: "admin" | "resident";
+  /** Chi gestisce Condominiak: vede anche le schede di formato da approvare. */
+  operatore?: boolean;
 }
+
+const LINK_OPERATORE = { href: "/dashboard/formati", label: "Formati", icon: FileCog };
 
 export const ADMIN_LINKS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -40,9 +45,9 @@ export function linksPerRuolo(role: "admin" | "resident") {
   return role === "admin" ? ADMIN_LINKS : RESIDENT_LINKS;
 }
 
-export function Sidebar({ role }: SidebarProps) {
+export function Sidebar({ role, operatore = false }: SidebarProps) {
   const pathname = usePathname();
-  const links = linksPerRuolo(role);
+  const links = operatore ? [...linksPerRuolo(role), LINK_OPERATORE] : linksPerRuolo(role);
 
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r bg-card sm:flex">

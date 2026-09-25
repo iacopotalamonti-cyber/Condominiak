@@ -71,7 +71,11 @@ l'app rispondeva con numeri che non tornavano con la carta.
 - [x] Pulizia dello storage: non serve più lanciarla a mano. La manutenzione
       oraria (`netlify/functions/manutenzione-storage.mts`) toglie i caricamenti
       abbandonati che sono doppioni di un file in archivio (26 file, ~50 MB)
-- [ ] Riconoscere un formato nuovo proponendo una scheda al modello, invece di scriverla a mano
+- [x] Riconoscere un formato nuovo proponendo una scheda al modello, invece di
+      scriverla a mano (25/09/2026). Verificata dalla quadratura, approvata da un
+      operatore in `/dashboard/formati`
+- [ ] Provarla su un rendiconto vero di un formato che non conosciamo: finora
+      è provata su un documento costruito nei test e sulle tre schede esistenti
 
 ## Chiesto il 23/09/2026 — da fare
 
@@ -158,7 +162,9 @@ condominio solo, e i PDF. In ordine di urgenza:
       misura (impostazioni, e la manutenzione oraria avvisa su Sentry oltre
       l'80%), e lo stesso PDF caricato due volte occupa spazio una volta sola.
       Il passaggio al Pro resta una decisione di spesa
-- [ ] **Il collo di bottiglia del prodotto sono i formati, non i dati**: centinaia
+- [x] **Il collo di bottiglia del prodotto sono i formati, non i dati** — dal
+      25/09/2026 la scheda la propone il modello (vedi sopra); resta da provarla
+      su un formato vero: centinaia
       di condomini vuol dire decine di amministratori, cioè decine di formati.
       Oggi ogni formato nuovo è una scheda scritta a mano. La scheda proposta dal
       modello, e verificata dalla quadratura, è ciò che rende la cosa scalabile

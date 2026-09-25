@@ -3,11 +3,11 @@ import { TopBar } from "@/components/layout/TopBar";
 import { getDashboardContext } from "@/lib/dashboard-context";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { role, condominium, condomini } = await getDashboardContext();
+  const { role, condominium, condomini, operatore } = await getDashboardContext();
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar role={role} />
+      <Sidebar role={role} operatore={operatore} />
       <div className="flex flex-1 flex-col">
         <TopBar condominium={condominium} role={role} condomini={condomini} />
         {/* pb-24: il badge "Powered by Netlify" è fisso in basso a destra e

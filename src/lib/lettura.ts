@@ -14,9 +14,9 @@
 
 import { getDocumentProxy } from "unpdf";
 
-import { leggi, riconosci, testoRiga, type Lettura } from "./motore.ts";
+import { leggi, riconosci, testoRiga, type Lettura, type ProfiloFormato } from "./motore.ts";
 import { PROFILI } from "./profili.ts";
-import { classifica, mappaturaPer, type Classificazione } from "./profilo.ts";
+import { classifica, mappaturaPer, type Classificazione, type Profilo } from "./profilo.ts";
 import { leggiRiparto, type Riparto } from "./riparto.ts";
 import type { Frammento, Pagina, Riga } from "./rendiconto.ts";
 import type { CategoriaSpesa, ExtractedBilancio, ExtractedMovimento, Fonte } from "./types.ts";
@@ -105,8 +105,19 @@ export function annoEsercizio(pagine: Pagina[]): number | null {
 // La lettura
 // ---------------------------------------------------------------------------
 
+/**
+ * Un formato che non è scritto nel codice: la scheda l'ha proposta il modello,
+ * la quadratura l'ha verificata, e una persona l'ha approvata.
+ */
+export interface SchedaApprovata {
+  scheda: ProfiloFormato;
+  mappatura: Profilo;
+}
+
 export interface RendicontoLetto {
   formato: string;
+  /** Dove finisce ogni voce di questo formato, se lo sappiamo. */
+  mappatura: Profilo | null;
   anno: number | null;
   lettura: Lettura;
   classificazione: Classificazione;
@@ -137,12 +148,18 @@ function arrotonda(valore: number): number {
  * Restituisce null quando il formato è sconosciuto — non è un errore, è il
  * caso normale per un amministratore nuovo, e chi chiama passa al modello.
  */
-export function leggiRendiconto(pagine: Pagina[]): RendicontoLetto | null {
-  const profilo = riconosci(pagine, PROFILI);
+export function leggiRendiconto(
+  pagine: Pagina[],
+  approvate: SchedaApprovata[] = []
+): RendicontoLetto | null {
+  // Prima i formati scritti a mano, poi quelli approvati: una scheda nuova non
+  // può prendere il posto di una che già funziona.
+  const profilo = riconosci(pagine, [...PROFILI, ...approvate.map((a) => a.scheda)]);
   if (!profilo) return null;
 
   const lettura = leggi(pagine, profilo);
-  const mappatura = mappaturaPer(profilo.nome);
+  const mappatura =
+    mappaturaPer(profilo.nome) ?? approvate.find((a) => a.scheda === profilo)?.mappatura ?? null;
   const classificazione = mappatura
     ? classifica(lettura, mappatura)
     : { spese: {}, rimborsi: [], nonMappate: [], totaleSpese: 0, totaleRimborsi: 0 };
@@ -158,6 +175,7 @@ export function leggiRendiconto(pagine: Pagina[]): RendicontoLetto | null {
 
   return {
     formato: profilo.nome,
+    mappatura,
     anno,
     lettura,
     classificazione,
@@ -218,7 +236,7 @@ export function estrazioneDa(letto: RendicontoLetto, documento: string): Extract
   // Le voci che compongono ciascuna categoria, per poter dire da dove viene un
   // numero invece di presentarlo e basta.
   const vociPerCategoria = new Map<string, { codice: string; importo: number; pagina: number }[]>();
-  const mappatura = mappaturaPer(letto.formato);
+  const mappatura = letto.mappatura;
 
   for (const voce of lettura.voci) {
     const destinazione = mappatura?.voci[voce.chiave];
@@ -302,7 +320,7 @@ export function estrazioneDa(letto: RendicontoLetto, documento: string): Extract
 }
 
 function movimentiDa(letto: RendicontoLetto, documento: string): ExtractedMovimento[] {
-  const mappatura = mappaturaPer(letto.formato);
+  const mappatura = letto.mappatura;
   const movimenti: ExtractedMovimento[] = [];
 
   for (const voce of letto.lettura.voci) {

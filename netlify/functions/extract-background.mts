@@ -1,6 +1,6 @@
 /// <reference types="@netlify/functions" />
 import { getStore } from "@netlify/blobs";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
 import { PDFDocument } from "pdf-lib";
 import { extractText, getDocumentProxy } from "unpdf";
@@ -33,8 +33,14 @@ import {
   notaDiLettura,
   pagineDi,
   type RendicontoLetto,
+  type SchedaApprovata,
 } from "../../src/lib/lettura";
 import type { ExtractedBilancio, ExtractionResult, UploadedFile } from "../../src/lib/types";
+import { riconosci } from "../../src/lib/motore";
+import { PROFILI } from "../../src/lib/profili";
+import { proponiScheda } from "../../src/lib/proposta-scheda";
+import type { Pagina } from "../../src/lib/rendiconto";
+import { validaProposta } from "../../src/lib/scheda";
 import { condominiDi } from "../../src/lib/appartenenza";
 import { BUCKET, eUuid, puoEstrarre } from "../../src/lib/percorsi";
 
@@ -46,6 +52,10 @@ const MAX_FILE = 12;
 // di salvare i risultati parziali invece di essere uccisi a metà lavoro.
 const DEADLINE_MS = 13 * 60_000;
 
+// Una proposta di scheda sono una o due chiamate al modello su un testo lungo:
+// si parte solo con almeno questo margine prima della scadenza.
+const MARGINE_PROPOSTA_MS = 4 * 60_000;
+
 // Quante riletture mirate al massimo: ognuna è una richiesta in più, e serve
 // solo dove i conti non tornano.
 const MAX_RILETTURE = 3;
@@ -56,16 +66,110 @@ const MAX_RILETTURE = 3;
 // si è già verificata da sola.
 async function letturaLibera(
   bytes: Uint8Array,
-  nome: string
-): Promise<RendicontoLetto | null> {
+  nome: string,
+  approvate: SchedaApprovata[]
+): Promise<{ pagine: Pagina[] | null; letto: RendicontoLetto | null }> {
   try {
-    return leggiRendiconto(await pagineDi(bytes));
+    const pagine = await pagineDi(bytes);
+    return { pagine, letto: leggiRendiconto(pagine, approvate) };
   } catch (error) {
     // Un PDF che non si lascia aprire qui si lascia comunque mandare al
     // modello: la lettura è una scorciatoia, non un passaggio obbligato.
     console.warn(`Lettura diretta fallita per ${nome}:`, error);
-    return null;
+    return { pagine: null, letto: null };
   }
+}
+
+// Le schede che il motore usa oltre a quelle scritte nel codice. Si
+// rivalidano anche se sono già state approvate: una riga modificata a mano nel
+// database non deve poter dare al motore un'espressione che non passerebbe.
+async function schedeDa(supabase: SupabaseClient, stato: "approvata" | "proposta"): Promise<SchedaApprovata[]> {
+  const { data, error } = await supabase
+    .from("schede_formato")
+    .select("nome, scheda, mappatura")
+    .eq("stato", stato)
+    .order("created_at", { ascending: true });
+  if (error) {
+    console.error(`Schede di formato (${stato}) non lette:`, error.message);
+    return [];
+  }
+  const riservati = PROFILI.map((p) => p.nome);
+  return (data ?? []).flatMap((riga) => {
+    const { proposta, errori } = validaProposta({ scheda: riga.scheda, mappatura: riga.mappatura }, riservati);
+    if (!proposta) console.warn(`Scheda "${riga.nome}" scartata: ${errori.join("; ")}`);
+    return proposta ? [proposta] : [];
+  });
+}
+
+// Un formato che non conosciamo: si chiede al modello una scheda, la si prova
+// sul documento, e se regge la si mette in attesa di approvazione. Il
+// documento di adesso lo legge comunque il modello, come sempre: la scheda
+// serve dal prossimo.
+async function proponiPer(
+  anthropic: Anthropic,
+  supabase: SupabaseClient,
+  pagine: Pagina[],
+  documento: string,
+  utente: string,
+  approvate: SchedaApprovata[]
+): Promise<string> {
+  const inAttesa = await schedeDa(supabase, "proposta");
+  const giaProposta = riconosci(pagine, inAttesa.map((p) => p.scheda));
+  if (giaProposta) {
+    return `${documento}: formato nuovo, la sua scheda ("${giaProposta.nome}") aspetta già l'approvazione.`;
+  }
+
+  const { model, effort } = configurazioneModello();
+  const riservati = [...PROFILI, ...approvate.map((a) => a.scheda)].map((p) => p.nome);
+  const esito = await proponiScheda(
+    pagine,
+    async (conversazione) => {
+      const message = await anthropic.messages
+        .stream({
+          model,
+          max_tokens: EXTRACTION_MAX_TOKENS,
+          thinking: { type: "adaptive" },
+          output_config: { effort },
+          messages: conversazione.map((testo, i) => ({
+            role: i % 2 === 0 ? ("user" as const) : ("assistant" as const),
+            content: testo,
+          })),
+        })
+        .finalMessage();
+      console.log(
+        `Proposta di scheda per ${documento}: ${message.usage.input_tokens} token in ingresso, ` +
+          `${message.usage.output_tokens} in uscita`
+      );
+      return message.content
+        .filter((b): b is Anthropic.TextBlock => b.type === "text")
+        .map((b) => b.text)
+        .join("");
+    },
+    riservati
+  );
+
+  if (!esito.proposta || !esito.verifica?.utilizzabile) {
+    console.warn(`Nessuna scheda utilizzabile per ${documento}: ${esito.problemi.join("; ")}`);
+    return "";
+  }
+
+  const { error } = await supabase.from("schede_formato").insert({
+    nome: esito.proposta.scheda.nome,
+    scheda: esito.proposta.scheda,
+    mappatura: { voci: esito.proposta.mappatura.voci, personali: esito.proposta.mappatura.personali },
+    verifica: esito.verifica,
+    documento_nome: documento,
+    proposta_da: utente,
+  });
+  if (error) {
+    console.error(`Scheda per ${documento} non salvata:`, error.message);
+    return "";
+  }
+  return (
+    `${documento}: formato nuovo ("${esito.proposta.scheda.nome}"). Il modello ne ha proposto la scheda, ` +
+    `che rilegge il documento in quadratura con il totale stampato: una volta approvata, i prossimi ` +
+    `rendiconti di questo formato si leggeranno senza modello.`
+  );
 }
 
 interface Piece {
@@ -521,6 +625,9 @@ export default async (req: Request) => {
     // I documenti che abbiamo saputo leggere da soli, e la riga che lo spiega.
     const letture: { file: UploadedFile; letto: RendicontoLetto }[] = [];
     const noteLettura: string[] = [];
+    // I PDF con testo di un formato che nessuna scheda riconosce.
+    const sconosciuti: { file: UploadedFile; pagine: Pagina[] }[] = [];
+    const approvate = await schedeDa(supabase, "approvata");
 
     for (const file of files) {
       const { data, error } = await supabase.storage.from(BUCKET).download(file.path);
@@ -530,7 +637,10 @@ export default async (req: Request) => {
       const bytes = new Uint8Array(await data.arrayBuffer());
 
       if (file.type === "application/pdf") {
-        const letto = await letturaLibera(bytes, file.name);
+        const { pagine, letto } = await letturaLibera(bytes, file.name, approvate);
+        if (!letto && pagine && pagine.some((p) => p.righe.length > 10)) {
+          sconosciuti.push({ file, pagine });
+        }
 
         if (letto && !letto.motivo) {
           letture.push({ file, letto });
@@ -686,6 +796,24 @@ export default async (req: Request) => {
     // condominio quando i loro numeri vengono salvati, non prima. Un'analisi
     // abbandonata non lascia niente nell'archivio.
     extracted.documenti = files;
+
+    // Le proposte di scheda vengono dopo l'estrazione, e solo se resta tempo:
+    // l'utente aspetta i suoi numeri, non la scheda.
+    for (const { file, pagine } of sconosciuti) {
+      if (Date.now() > deadline - MARGINE_PROPOSTA_MS) break;
+      await salva({
+        status: "running",
+        progress: { fatti: pieces.length, totale: pieces.length, documento: `scheda del formato di ${file.name}` },
+      });
+      try {
+        const nota = await proponiPer(anthropic, supabase, pagine, file.name, proprietario!, approvate);
+        if (nota) noteLettura.push(nota);
+      } catch (error) {
+        // Una proposta fallita non tocca l'estrazione, che è già fatta.
+        console.error(`Proposta di scheda fallita per ${file.name}:`, error);
+        Sentry.captureException(error, { tags: { jobId, fase: "proposta-scheda" } });
+      }
+    }
 
     const problemi = riepilogoControlli(extracted.bilanci);
     extracted.note = [
