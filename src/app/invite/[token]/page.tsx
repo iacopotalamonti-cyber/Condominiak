@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PASSWORD_MINIMA } from "@/lib/password";
 
 type Stato = "verifica" | "accesso" | "conferma-email" | "accettazione" | "errore";
 
@@ -169,7 +170,7 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
                 </form>
                 <form onSubmit={(e) => entra(e, true)} className="flex flex-col gap-3 border-t pt-6">
                   <Label htmlFor="password-nuova">Non hai un account? Scegli una password</Label>
-                  <Input id="password-nuova" name="password" type="password" required minLength={6} />
+                  <Input id="password-nuova" name="password" type="password" required minLength={PASSWORD_MINIMA} />
                   <Button type="submit" variant="outline" disabled={lavorando}>
                     {lavorando && <Loader2 className="animate-spin" />}
                     Crea l&apos;account e accetta

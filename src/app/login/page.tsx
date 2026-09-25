@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { PASSWORD_MINIMA } from "@/lib/password";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -202,7 +203,7 @@ export default function LoginPage() {
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="reg-password">Password</Label>
-                    <Input id="reg-password" name="password" type="password" required minLength={6} />
+                    <Input id="reg-password" name="password" type="password" required minLength={PASSWORD_MINIMA} />
                   </div>
                   <Button type="submit" disabled={loading} className="mt-2">
                     {loading && <Loader2 className="animate-spin" />}
