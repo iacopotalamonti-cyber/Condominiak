@@ -178,6 +178,9 @@ Serve tutto, invece, prima che entri qualcuno che non conosciamo.
 - [ ] Deduplicazione dei condomini per indirizzo
 - [ ] Procedura di contestazione e subentro del primo iscritto
 - [ ] Decidere cosa vede l'inquilino rispetto al proprietario
+- [ ] Login con Google e Apple, oltre a email/password (`SERVIZI.md` → Parte
+      A): abbassa l'attrito proprio quando l'invito a cascata inizia a portare
+      persone vere, non solo noi
 
 ## Fase 1 — Chiarire il prodotto
 
