@@ -1,4 +1,4 @@
-# Stato del progetto — aggiornato al 23/09/2026
+# Stato del progetto — aggiornato al 25/09/2026
 
 Mappa di quello che esiste **davvero nel codice** oggi. Serve a non rispiegare
 il progetto da capo a ogni sessione, e a distinguere ciò che è fatto da ciò che
@@ -29,10 +29,11 @@ tutto il codice (19/09/2026); non esistono più riferimenti a CondoTwin.
 | --- | --- | --- |
 | Registrazione / login | `src/app/login/`, `src/middleware.ts` | funzionante |
 | Recupero password | `src/app/login/`, `src/app/reset/` | funzionante — richiede gli indirizzi di ritorno elencati in Supabase |
-| Invito condomino via token | `src/app/invite/[token]/`, `src/app/api/invite-resident/` | funzionante |
+| Invito via token | `src/app/invite/[token]/`, `src/app/api/invite-resident/`, `src/app/api/accetta-invito/`, `src/lib/inviti.ts` | funzionante — token segreto (solo l'impronta nel database), 14 giorni, uso singolo, legato all'email; accettato lato server |
+| Più condomini e più unità per persona | `src/lib/appartenenza.ts`, `src/components/layout/CondominioSelector.tsx` | funzionante — tabelle `membri` e `unita_membri`, condominio attivo scelto con un cookie |
 | Wizard di onboarding condominio | `src/app/onboarding/`, `src/components/onboarding/` | funzionante |
 | Lettura diretta dei rendiconti conosciuti | `src/lib/lettura.ts`, `src/lib/motore.ts`, `src/lib/profili.ts`, `src/lib/profilo.ts` | funzionante, tre formati, costo zero |
-| Estrazione AI da documenti | `netlify/functions/extract-background.mts`, `src/app/api/extract-status/` | funzionante, asincrona — usata solo quando la lettura diretta non basta |
+| Estrazione AI da documenti | `netlify/functions/extract-background.mts`, `src/app/api/extract-status/` | funzionante, asincrona — usata solo quando la lettura diretta non basta. Chiede il token di sessione; analizza solo file propri o di un condominio che si amministra; lo stato lo legge solo chi l'ha avviata |
 | Provenienza degli importi (documento/pagina/riga) | `fonti` su `bilanci`, `fonte_*` su `spese`/`movimenti` | funzionante |
 | Quadratura bilancio + conflitti | `src/lib/bilancio.ts`, `src/lib/riconciliazione.ts` | funzionante, con test |
 | Dashboard amministratore | `src/app/dashboard/page.tsx` | funzionante |
@@ -40,7 +41,8 @@ tutto il codice (19/09/2026); non esistono più riferimenti a CondoTwin.
 | Analisi spese per categoria | `src/app/dashboard/spese/` | funzionante |
 | Incassi e partite personali | `src/app/dashboard/spese/`, `src/lib/incassi.ts` | funzionante |
 | Anagrafica fornitori + movimenti | `src/app/dashboard/fornitori/`, `src/lib/fornitori.ts` | funzionante |
-| Archivio documenti | `src/app/dashboard/documenti/` | funzionante |
+| Archivio documenti | `src/app/dashboard/documenti/`, `src/lib/percorsi.ts`, `src/lib/archivio.ts` | funzionante — i file sono del condominio (`{condominio}/documenti/`), li apre ogni membro; lo stesso PDF caricato due volte è un file solo |
+| Manutenzione dello Storage | `netlify/functions/manutenzione-storage.mts`, `src/lib/manutenzione.ts` | ogni ora: sposta lo storico `documenti/{utente}/` nel condominio, toglie i caricamenti abbandonati che sono doppioni, avvisa oltre l'80% dello spazio |
 | Impianti (anagrafica + scadenze) | `src/app/dashboard/impianti/` | funzionante |
 | Vista condomino (il suo appartamento) | `src/app/dashboard/appartamento/` | funzionante — la quota viene dal riparto letto, non da una divisione per millesimi |
 | Lettura del riparto per unità | `src/lib/riparto.ts`, `src/lib/quote.ts` | funzionante sui rendiconti Tosiani |
@@ -48,8 +50,8 @@ tutto il codice (19/09/2026); non esistono più riferimenti a CondoTwin.
 
 ## Modello dati (tabelle Supabase)
 
-`condominiums`, `unita`, `bilanci`, `spese`, `incassi`, `quote_unita`, `movimenti`,
-`fornitori`, `impianti`, `pagamenti`, `documenti`. Definizioni TypeScript in `src/lib/types.ts`.
+`condominiums`, `membri`, `unita`, `unita_membri`, `inviti`, `bilanci`, `spese`, `incassi`,
+`quote_unita`, `movimenti`, `fornitori`, `impianti`, `pagamenti`, `documenti`. Definizioni TypeScript in `src/lib/types.ts`.
 
 Migrazioni applicate, in ordine (`supabase/migrations/`):
 
@@ -57,17 +59,21 @@ Migrazioni applicate, in ordine (`supabase/migrations/`):
 2. `20260916000000_verifica_non_possibile.sql`
 3. `20260916100000_movimenti.sql`
 4. `20260916110000_anagrafica_fornitori.sql`
-5. `20260920120000_spese_lette_dai_documenti.sql` — sostituisce i numeri estratti
-   dal modello con quelli letti dai documenti, sei esercizi dal 2020 al 2025
-6. `consuntivo_e_totale_documento_separati` (applicata il 20/09/2026)
-7. `20260920130000_incassi.sql` — la tabella delle partite di singoli condomini
-8. `20260920140000_incassi_dei_sei_esercizi.sql` — le quattro righe dei sei anni
-
-9. `20260923100000_quote_dal_riparto.sql` — anagrafica completa (tipologia,
+5. `consuntivo_e_totale_documento_separati` (applicata il 20/09/2026)
+6. `20260920130000_incassi.sql` — la tabella delle partite di singoli condomini
+7. `20260923100000_quote_dal_riparto.sql` — anagrafica completa (tipologia,
    codice, subalterno) e tabella `quote_unita`. Provata su staging prima
-10. `20260923110000_quote_tre_esercizi.sql` — le 30 unità mancanti e le quote di
-    2023, 2024, 2025. Il modo esatto di tornare indietro è in
-    `supabase/rollback/`
+8. `20260923120000_permessi_espliciti.sql` — i permessi di ogni tabella scritti
+   per esteso; `anon` non ne ha nessuno
+9. `20260924100000_membri.sql` — `membri`, `unita_membri`, `inviti`, e tutte le
+   policy riscritte sopra di esse
+10. `20260925100000_storage_per_condominio.sql` — le policy del bucket su `membri`
+11. `20260925110000_spazio_documenti.sql` — quanto occupano i documenti
+
+I numeri di Via Enriques 3 scritti a mano — sei esercizi, incassi, quote e
+anagrafica del 2023-2025 — erano migrazioni e non lo sono più: stanno in
+`supabase/dati/`, ogni istruzione ancorata al condominio per id. Un test in CI
+impedisce di rimetterne dentro le migrazioni.
 
 Le quattro del 20/09 sono state applicate direttamente in produzione, con un
 backup prima e una verifica dopo, saltando lo staging — che è stato riallineato
@@ -91,10 +97,6 @@ Progetti Supabase (organizzazione "Condominial", eu-west-1):
 Non sono funzionalità mancanti, sono i pezzi di infrastruttura che oggi non ci
 sono affatto:
 
-- **Un utente = un solo appartamento**: `getDashboardContext`
-  (`src/lib/dashboard-context.ts:26` e `:37`) usa `maybeSingle()` sia sui
-  condomini posseduti sia sulle unità. Chi ha due appartamenti non ottiene una
-  riga e finisce rimbalzato all'onboarding. Incompatibile con il prodotto deciso.
 - **Dai verbali non si estrae nulla**: sono accettati e archiviati, ma lo schema
   di estrazione copre solo anagrafica, unità, bilanci, spese e impianti. Nessuna
   delibera diventa un dato.
@@ -107,10 +109,6 @@ sono affatto:
 - **Il backup non è ancora stato provato con un ripristino.** Dal 20/09/2026 il
   database ha una copia giornaliera (`.github/workflows/backup.yml`), ma finché
   non se ne ripristina una su staging non sappiamo se sia utilizzabile.
-- **L'invito ai condòmini non collega nessuno** (verificato): la policy
-  `resident_access` su `unita` impedisce a un invitato di rivendicare la propria
-  unità, e l'update client-side fallisce in silenzio. Vedi `SERVIZI.md` → "Come
-  si entra", punto 4.
 - **Nessun pagamento, nessuna fatturazione, nessun contratto**: l'app non ha
   ancora un modo per incassare.
 - **Nessun documento legale**: privacy policy, termini, registro trattamenti GDPR
@@ -119,10 +117,13 @@ sono affatto:
 
 ## Test presenti
 
-`npm test` — dieci file in `src/lib/__tests__/`: `anthropic`, `bilancio`,
-`lettura`, `motore`, `movimenti`, `profilo`, `quote`, `rendiconto`, `riparto`,
-`riconciliazione`. Centosette test che coprono il calcolo, il parsing e la lettura dei rendiconti;
-non le pagine, non le API, non i flussi end-to-end.
+`npm test` — quattordici file in `src/lib/__tests__/`, 135 test: calcolo, parsing e
+lettura dei rendiconti, inviti, percorsi e archiviazione dei documenti,
+manutenzione dello Storage, e le regole sulle migrazioni. Non le pagine, non le
+API, non i flussi end-to-end.
+
+La RLS si prova su staging con `supabase/tests/` (tabelle e bucket): per ogni
+utente finto conta cosa vede e prova a scrivere dove non dovrebbe.
 
 ## Dati in archivio
 

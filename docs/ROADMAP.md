@@ -65,10 +65,12 @@ l'app rispondeva con numeri che non tornavano con la carta.
       generali ora sommano 1000,000
 - [ ] Per il 2020, 2021 e 2022 il riparto non si legge ancora: sono gli altri
       due formati (Contavalli, MULTIGEST), che lo stampano diversamente
-- [ ] Collegare una persona a più unità (appartamento, box, cantina) senza
-      passare dal nome: è la tabella `membri` della Fase 1 bis
+- [x] Collegare una persona a più unità (appartamento, box, cantina) senza
+      passare dal nome: tabella `unita_membri` (25/09/2026)
 - [ ] Caricare i movimenti di 2020, 2023 e 2024, che il motore legge gratis
-- [ ] Pulizia dello storage: 28 file duplicati, ~50 MB (`npm run pulisci-storage -- --esegui`)
+- [x] Pulizia dello storage: non serve più lanciarla a mano. La manutenzione
+      oraria (`netlify/functions/manutenzione-storage.mts`) toglie i caricamenti
+      abbandonati che sono doppioni di un file in archivio (26 file, ~50 MB)
 - [ ] Riconoscere un formato nuovo proponendo una scheda al modello, invece di scriverla a mano
 
 ## Chiesto il 23/09/2026 — da fare
@@ -111,9 +113,8 @@ produce gli stessi numeri. È la prova che manca.
       soli impianti o su qualcos'altro
 - [ ] **Mettere una bacheca**: ogni condòmino scrive quando si rompe qualcosa, e
       lo etichetta come segnalazione. Tabella nuova, con RLS per condominio
-- [ ] Nota di sequenza: **la bacheca è inutile finché l'invito non collega
-      nessuno** (oggi 0 unità su 14 hanno un utente). Prima la Fase 1 bis, o la
-      bacheca la vedrai scrivere solo tu
+- [x] Nota di sequenza: la bacheca era inutile finché l'invito non collegava
+      nessuno. Dal 25/09/2026 l'invito funziona: si può fare
 
 ## Per reggere centinaia di condomini (verificato il 23/09/2026)
 
@@ -122,35 +123,41 @@ quote, spese e movimenti, e trecento condomini per dieci anni sono 400.000
 righe — poche, per Postgres. Il problema sono alcune assunzioni da un
 condominio solo, e i PDF. In ordine di urgenza:
 
-- [ ] **Permessi espliciti sulle tabelle** (`20260923120000_permessi_espliciti.sql`):
-      dal 30/10/2026 Supabase non li concede più alle tabelle nuove, e senza di
-      loro le nostre migrazioni ricostruiscono un database che l'app non legge.
-      Applicata e verificata su staging; da applicare in produzione. Toglie anche
-      ad anon i permessi che aveva su tutto
-- [ ] **Una persona, più unità; un proprietario, più condomini.**
+- [x] **Permessi espliciti sulle tabelle** (`20260923120000_permessi_espliciti.sql`):
+      dal 30/10/2026 Supabase non li concede più alle tabelle nuove. Applicata in
+      produzione il 25/09/2026; `anon` non ha più permessi su nessuna tabella
+- [x] **Una persona, più unità; un proprietario, più condomini.** Fatto il
+      25/09/2026: tabelle `membri` e `unita_membri`, selettore del condominio.
       `getDashboardContext` legge condominio e unità con `.maybeSingle()`: con due
       righe fallisce e rimanda all'onboarding. È l'assunzione più grave, perché il
       prodotto la contraddice per definizione. Si risolve con la tabella `membri`
       della Fase 1 bis
-- [ ] **Indici sulle colonne che la RLS legge a ogni riga**: `condominiums.owner_id`
+- [x] **Indici sulle colonne che la RLS legge a ogni riga** (25/09/2026).: `condominiums.owner_id`
       e `unita.user_id` non ne hanno, e ogni policy le interroga
-- [ ] **RLS che ricalcola l'utente a ogni riga** (21 policy): `auth.uid()` va
+- [x] **RLS che ricalcola l'utente a ogni riga** (21 policy). Riscritte il
+      25/09/2026, una per azione; l'advisor non segnala più nulla.: `auth.uid()` va
       scritto `(select auth.uid())`, così si valuta una volta per query. Due
       policy permissive per tabella (amministratore e condomino) si possono
       fondere in una. Correzione meccanica, segnalata dall'advisor di Supabase
-- [ ] **Le migrazioni di dati assumono un condominio solo**: usano
+- [x] **Le migrazioni di dati assumono un condominio solo**. Fatto il
+      25/09/2026: i dati stanno in `supabase/dati/`, ancorati per id, e un test
+      in CI lo impone.: usano
       `select id from condominiums limit 1`. Sono già state eseguite, ma stanno
       nella storia che si ripete in un ripristino: su un database con più
       condomini scriverebbero i dati di Via Enriques nel primo che capita.
       Vanno ancorate all'id del condominio
-- [ ] **I documenti in archivio sono per utente, non per condominio**
+- [x] **I documenti in archivio sono per utente, non per condominio**. Fatto il
+      25/09/2026: `{condominio}/documenti/`, lo storico lo sposta la manutenzione.
       (`documenti/{user_id}/…`): con più persone nello stesso condominio, uno
       non vede i PDF caricati dall'altro
 - [ ] **I PDF sono il vero volume**: i rendiconti di Via Enriques pesano da 0,6 a
       2,3 MB, in media 1,4. Con tre documenti l'anno (consuntivo, preventivo,
       verbale) il piano gratuito — 1 GB di storage — basta per una ventina di
       condomini con dieci anni di storico; trecento condomini sono circa 13 GB.
-      Serve il piano Pro prima di quella soglia
+      Serve il piano Pro prima di quella soglia. Dal 25/09/2026 lo spazio si
+      misura (impostazioni, e la manutenzione oraria avvisa su Sentry oltre
+      l'80%), e lo stesso PDF caricato due volte occupa spazio una volta sola.
+      Il passaggio al Pro resta una decisione di spesa
 - [ ] **Il collo di bottiglia del prodotto sono i formati, non i dati**: centinaia
       di condomini vuol dire decine di amministratori, cioè decine di formati.
       Oggi ogni formato nuovo è una scheda scritta a mano. La scheda proposta dal
@@ -163,8 +170,10 @@ condominio solo, e i PDF. In ordine di urgenza:
 Per il nostro condominio non serve: siamo gli unici utenti e il rischio è nullo.
 Serve tutto, invece, prima che entri qualcuno che non conosciamo.
 
-- [ ] Rifare l'invito lato server: **oggi non collega nessuno** (RLS blocca l'update client-side). Token segreto, con scadenza, a uso singolo — non l'id dell'unità
-- [ ] Tabella `membri` e policy RLS riscritte sopra di essa
+- [x] Rifare l'invito lato server: token segreto, con scadenza, a uso singolo — non l'id dell'unità (25/09/2026)
+- [x] Tabella `membri` e policy RLS riscritte sopra di essa (25/09/2026)
+- [x] Estrazione chiusa a chi non ne ha diritto: la funzione chiede il token di
+      sessione e verifica i file; lo stato lo legge solo chi l'ha avviata (25/09/2026)
 - [ ] Deduplicazione dei condomini per indirizzo
 - [ ] Procedura di contestazione e subentro del primo iscritto
 - [ ] Decidere cosa vede l'inquilino rispetto al proprietario
