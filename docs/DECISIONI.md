@@ -168,6 +168,45 @@ Scartato: seguire il modello suggerito da Supabase, che concede a anon la
 lettura. Con la RLS scritta bene non cambierebbe nulla; con una policy scritta
 male, la differenza è fra un errore e i dati di un condominio su internet.
 
+**25/09/2026 — Chi vede cosa lo decide la tabella `membri`.**
+Prima l'appartenenza si deduceva da due colonne: `condominiums.owner_id` per
+l'amministratore, `unita.user_id` per il condomino, una riga ciascuno. Con due
+appartamenti, o due condomini, l'utente finiva all'onboarding. Ora una persona
+è membro di quanti condomini vuole, con un ruolo per ciascuno, ed è collegata a
+quante unità vuole. `owner_id` resta come memoria di chi ha registrato il
+condominio, non come permesso. Il condominio che si sta guardando è una
+preferenza in un cookie: se nomina un condominio non più suo, non vale.
+
+**25/09/2026 — L'invito è un token segreto, non l'id di un'unità.**
+Casuale (32 byte), salvato solo come impronta, valido 14 giorni, usabile una
+volta, e solo dall'email a cui è stato mandato. Si accetta sul server: la RLS
+non deve lasciar scrivere a un utente il proprio collegamento a un'unità.
+Scartato: collegare per email alla registrazione. Un'email scritta male
+nell'anagrafica collegherebbe un estraneo all'appartamento di un altro.
+
+**25/09/2026 — I documenti sono del condominio, non di chi li carica.**
+`{condominio}/documenti/{impronta}-{nome}`: li apre ogni membro, e restano dove
+sono se l'amministratore cambia. Un file entra nell'archivio quando i suoi
+numeri vengono salvati, non quando viene analizzato: un'analisi abbandonata non
+lascia niente in archivio. L'impronta del contenuto nel nome fa sì che lo
+stesso PDF caricato due volte sia un file solo.
+
+**25/09/2026 — La manutenzione dello Storage non cancella mai un contenuto unico.**
+Sposta lo storico nel condominio i cui dati lo citano (copia, aggiorna le
+righe, e solo alla fine toglie l'originale), e cancella un caricamento
+abbandonato solo se lo stesso contenuto è già in archivio. Un file che non si
+sa di chi sia resta dov'è e finisce nel rapporto. Scartato: cancellare i
+caricamenti più vecchi di un mese. Fra i 27 file di oggi ce n'è uno che non
+esiste da nessun'altra parte.
+
+**25/09/2026 — Le migrazioni sono schema; i dati di un condominio no.**
+Le tre migrazioni che scrivevano i numeri di Via Enriques sceglievano il
+condominio con `limit 1`, e due `update` non lo sceglievano affatto: su un
+database con più condomini avrebbero scritto su uno a caso e spostato gli
+esercizi di tutti. Sono passate in `supabase/dati/`, dove ogni file nomina il
+condominio per id e si ferma se non lo trova. Non si riscrive la storia di
+produzione: sono già state applicate, e restano come registro.
+
 ## Aperte
 
 **Cosa vede un condòmino che non è consigliere**, e come trattiamo i dati

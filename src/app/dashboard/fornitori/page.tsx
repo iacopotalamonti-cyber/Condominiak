@@ -25,7 +25,7 @@ export default async function FornitoriPage({
 }: {
   searchParams: Promise<{ anno?: string }>;
 }) {
-  const { role, condominium, userId } = await getDashboardContext();
+  const { role, condominium } = await getDashboardContext();
   const supabase = await createClient();
 
   const [{ data }, { data: datiFornitori }] = await Promise.all([
@@ -46,7 +46,7 @@ export default async function FornitoriPage({
     .not("documento_path", "is", null);
 
   const archiviati = await documentiArchiviati(
-    userId,
+    condominium.id,
     (datiBilanci ?? []) as { anno: number; documento_path: string | null }[]
   );
 

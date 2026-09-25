@@ -33,7 +33,7 @@ export default async function ImpostazioniPage() {
 
   // Chi è collegato a quale unità, e gli inviti non ancora usati. Li vede solo
   // chi gestisce il condominio: la RLS mostra agli altri soltanto i propri.
-  const [{ data: collegamenti }, { data: datiInviti }, { count: persone }] = await Promise.all([
+  const [{ data: collegamenti }, { data: datiInviti }, { count: persone }, { data: spazio }] = await Promise.all([
     supabase.from("unita_membri").select("unita_id").in("unita_id", unita.map((u) => u.id)),
     supabase
       .from("inviti")
@@ -46,6 +46,7 @@ export default async function ImpostazioniPage() {
       .from("membri")
       .select("id", { count: "exact", head: true })
       .eq("condominium_id", condominium.id),
+    supabase.rpc("spazio_documenti", { condominio: condominium.id }).single<{ file: number; byte: number }>(),
   ]);
 
   const collegatiPerUnita = new Map<string, number>();
@@ -129,6 +130,19 @@ export default async function ImpostazioniPage() {
           </p>
         </CardContent>
       </Card>
+
+      {spazio && spazio.file > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Documenti</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground">
+            {spazio.file} file in archivio,{" "}
+            {(Number(spazio.byte) / 1_048_576).toLocaleString("it-IT", { maximumFractionDigits: 1 })} MB.
+            Lo stesso documento caricato più volte occupa spazio una volta sola.
+          </CardContent>
+        </Card>
+      )}
 
       {inviti.length > 0 && (
         <Card>

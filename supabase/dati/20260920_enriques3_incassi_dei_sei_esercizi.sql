@@ -1,3 +1,22 @@
+-- Dati del condominio di via Enriques 3, Bologna (f0b9dfd6-8b20-460a-8b2c-86176f06caa9).
+--
+-- Era una migrazione: è stata applicata in produzione il giorno nel nome del
+-- file, ed è qui come registro di cosa è stato scritto e perché. Non è
+-- schema, e non deve girare su un database nuovo: i numeri di un condominio
+-- non appartengono a nessun altro. Ogni riga nomina il condominio per id, e
+-- se quel condominio non c'è il file si ferma prima di scrivere.
+--
+-- Prima, al posto dell'id c'era "(select id from public.condominiums limit 1)",
+-- e alcune istruzioni non nominavano il condominio affatto: su un database con
+-- due condomini avrebbe scritto su uno a caso e spostato gli esercizi di tutti.
+
+do $$
+begin
+  if not exists (select 1 from public.condominiums where id = 'f0b9dfd6-8b20-460a-8b2c-86176f06caa9') then
+    raise exception 'Questo file è per il condominio di via Enriques 3 (f0b9dfd6-8b20-460a-8b2c-86176f06caa9): qui non esiste.';
+  end if;
+end $$;
+
 -- Le partite di singoli condomini dei sei esercizi già caricati.
 --
 -- Sono la differenza, finora inspiegata, fra le voci di spesa e il totale
@@ -19,22 +38,22 @@ insert into public.incassi
   (condominium_id, anno, descrizione, importo, codice,
    fonte_documento, fonte_verificata, fonte_verificabile, note)
 values
-  ((select id from public.condominiums limit 1), 2020,
+  ('f0b9dfd6-8b20-460a-8b2c-86176f06caa9'::uuid, 2020,
    'Spese personali riaddebitate ai singoli condomini', -31.30, 'Spese personali',
    'consuntivo_condominio_2019_2020.pdf', true, true,
    'Il documento sottrae questa partita dal totale: le spese comuni sono 12.425,35 contro i 12.394,05 stampati.'),
 
-  ((select id from public.condominiums limit 1), 2021,
+  ('f0b9dfd6-8b20-460a-8b2c-86176f06caa9'::uuid, 2021,
    'Spese personali riaddebitate ai singoli condomini', 35.02, '12',
    'Condominio_Enriques_3_-_Nuovo_Bilancio_come_da_delibera.pdf', true, true,
    'Il documento somma questa partita al totale: le spese comuni sono 20.822,72 contro i 20.857,74 stampati.'),
 
-  ((select id from public.condominiums limit 1), 2022,
+  ('f0b9dfd6-8b20-460a-8b2c-86176f06caa9'::uuid, 2022,
    'Spese personali riaddebitate ai singoli condomini', 98.00, '12',
    'ENRIQUES_3.pdf', true, true,
    'Il documento somma questa partita al totale: le spese comuni sono 32.146,88 contro i 32.244,88 stampati.'),
 
-  ((select id from public.condominiums limit 1), 2024,
+  ('f0b9dfd6-8b20-460a-8b2c-86176f06caa9'::uuid, 2024,
    'Rimborsi assicurativi generali proprietà', -2500.00, '008.002',
    'Rendiconto Consuntivo 2023-2024 - Via Enriques 3 (1).pdf', true, true,
    'Rimborso di un sinistro incassato dal condominio. Il documento lo sottrae dalle spese: spese comuni 30.793,26 contro i 28.293,26 stampati.')

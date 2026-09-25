@@ -1,3 +1,22 @@
+-- Dati del condominio di via Enriques 3, Bologna (f0b9dfd6-8b20-460a-8b2c-86176f06caa9).
+--
+-- Era una migrazione: è stata applicata in produzione il giorno nel nome del
+-- file, ed è qui come registro di cosa è stato scritto e perché. Non è
+-- schema, e non deve girare su un database nuovo: i numeri di un condominio
+-- non appartengono a nessun altro. Ogni riga nomina il condominio per id, e
+-- se quel condominio non c'è il file si ferma prima di scrivere.
+--
+-- Prima, al posto dell'id c'era "(select id from public.condominiums limit 1)",
+-- e alcune istruzioni non nominavano il condominio affatto: su un database con
+-- due condomini avrebbe scritto su uno a caso e spostato gli esercizi di tutti.
+
+do $$
+begin
+  if not exists (select 1 from public.condominiums where id = 'f0b9dfd6-8b20-460a-8b2c-86176f06caa9') then
+    raise exception 'Questo file è per il condominio di via Enriques 3 (f0b9dfd6-8b20-460a-8b2c-86176f06caa9): qui non esiste.';
+  end if;
+end $$;
+
 -- Le quote dei tre esercizi Tosiani, e le 30 unità che l'anagrafica non
 -- conosceva.
 --
@@ -26,7 +45,7 @@
 -- Le 14 unità che c'erano ricevono codice, subalterno e millesimi a tre
 -- decimali: il collegamento si fa su interno E nome, e se uno dei due non
 -- corrisponde la riga non si aggiorna — la verifica dopo se ne accorge.
-with c as (select id from public.condominiums limit 1),
+with c as (select id from public.condominiums where id = 'f0b9dfd6-8b20-460a-8b2c-86176f06caa9'),
 nuovi(interno, codice, sub, millesimi, nome) as (values
   (1,'001','32',79.065,'Arezzo - Petruccelli'),
   (2,'002','35',44.614,'Daloiso Cesare'),
@@ -50,7 +69,7 @@ where u.condominium_id = c.id and u.interno = nuovi.interno and u.nome_proprieta
 -- Le 30 unità che l'anagrafica non conosceva: box, cantine, posti auto.
 insert into public.unita (condominium_id, interno, codice, sub, tipologia, millesimi, nome_proprietario)
 select c.id, null, v.codice, v.sub, v.tipologia, v.millesimi, v.nome
-from (select id from public.condominiums limit 1) c,
+from (select id from public.condominiums where id = 'f0b9dfd6-8b20-460a-8b2c-86176f06caa9') c,
 (values
   ('015','31','box',5.322,'Arezzo - Petruccelli'),
   ('016','20','box',5.273,'Esposito - Salvato'),
@@ -86,7 +105,7 @@ from (select id from public.condominiums limit 1) c,
 on conflict (condominium_id, codice) where codice is not null do nothing;
 
 -- 2025: 44 unità, 9 colonne, somma 27748.79
-with c as (select id from public.condominiums limit 1),
+with c as (select id from public.condominiums where id = 'f0b9dfd6-8b20-460a-8b2c-86176f06caa9'),
 colonne as (select array['Millesimi Generali','Millesimi Scale e Ascensore','Millesimi Corsello Garage','Millesimi Generali Fotovoltaico','Millesimi Gen. NO Posti Auto','Millesimi Gen. Conduz. Appartamenti','Personali e Rimborsi','Spese Riscaldamento','Spese Raffr. - ACS - AFS']::text[] as nomi),
 dati(codice, tipologia, nome, importi, millesimi, totale, pagina) as (values
   ('001','Appartamento','Arezzo - Petruccelli',array[509.25,230.77,null,69.39,31.29,16.99,44.43,594.8,292.11]::numeric[],array[79.065,40.408,null,79.065,79.065,79.065,null,null,null]::numeric[],1789.03,17),
@@ -144,7 +163,7 @@ left join public.unita u on u.condominium_id = c.id and u.codice = d.codice
 on conflict (condominium_id, anno, codice_unita) do update set unita_id = excluded.unita_id, importi = excluded.importi, millesimi = excluded.millesimi, totale = excluded.totale, fonte_documento = excluded.fonte_documento, fonte_pagina = excluded.fonte_pagina, documento_path = excluded.documento_path;
 
 -- 2024: 44 unità, 10 colonne, somma 28293.24
-with c as (select id from public.condominiums limit 1),
+with c as (select id from public.condominiums where id = 'f0b9dfd6-8b20-460a-8b2c-86176f06caa9'),
 colonne as (select array['Millesimi Generali','Millesimi Scale e Ascensore','Millesimi Corsello Garage','Millesimi Generali Parziali','Millesimi Generali Fotovoltaico','Millesimi Gen. NO Posti Auto','Personali e Rimborsi','Spese Riscaldamento','Spese Raffr. - ACS - AFS','Consumi Enel Box/Cantine']::text[] as nomi),
 dati(codice, tipologia, nome, importi, millesimi, totale, pagina) as (values
   ('001','Appartamento','Arezzo - Petruccelli',array[428.95,243.14,null,-217.57,492.06,145.62,44.41,415.1,359.55,null]::numeric[],array[79.065,40.408,null,79.065,79.065,79.065,null,null,null,null]::numeric[],1911.26,18),
@@ -202,7 +221,7 @@ left join public.unita u on u.condominium_id = c.id and u.codice = d.codice
 on conflict (condominium_id, anno, codice_unita) do update set unita_id = excluded.unita_id, importi = excluded.importi, millesimi = excluded.millesimi, totale = excluded.totale, fonte_documento = excluded.fonte_documento, fonte_pagina = excluded.fonte_pagina, documento_path = excluded.documento_path;
 
 -- 2023: 44 unità, 10 colonne, somma 30915.77
-with c as (select id from public.condominiums limit 1),
+with c as (select id from public.condominiums where id = 'f0b9dfd6-8b20-460a-8b2c-86176f06caa9'),
 colonne as (select array['Millesimi Generali','Millesimi Scale e Ascensore','Millesimi Corsello Garage','Millesimi Generali Parziali','Millesimi Generali Fotovoltaico','Millesimi Gen. NO Posti Auto','Millesimi Gen. Conduz. Appartamenti','Personali e Rimborsi','Spese Riscaldamento','Spese Raffresc. - ACS - AFS']::text[] as nomi),
 dati(codice, tipologia, nome, importi, millesimi, totale, pagina) as (values
   ('001','Appartamento','Arezzo - Petruccelli',array[407.04,317.25,null,381.17,44.48,32.61,-11.68,null,485.97,567.37]::numeric[],array[79.065,40.408,null,79.065,79.065,79.065,79.065,null,null,null]::numeric[],2224.21,19),
