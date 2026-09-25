@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
@@ -178,58 +179,12 @@ export async function POST(req: NextRequest) {
       if (error) throw error;
     }
 
+    // Il cruscotto si ricostruisce alla prossima visita con i numeri nuovi,
+    // qualunque pagina si apra dopo il salvataggio.
+    revalidatePath("/dashboard", "layout");
     return NextResponse.json({ success: true, anno });
   } catch (error) {
     console.error("Save bilancio error:", error);
     return NextResponse.json({ success: false, error: "Salvataggio fallito" }, { status: 500 });
-  }
-}
-
-// Un esercizio letto male resta in archivio finché qualcuno non lo toglie, e
-// falsa il grafico e i totali di ogni altra pagina. Toglierlo è una cosa che
-// l'amministratore deve poter fare da solo, senza passare dal database.
-export async function DELETE(req: NextRequest) {
-  try {
-    const supabaseAuth = await createClient();
-    const {
-      data: { user },
-    } = await supabaseAuth.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ success: false, error: "Non autenticato" }, { status: 401 });
-    }
-
-    const condominiumId = req.nextUrl.searchParams.get("condominiumId") ?? "";
-    const anno = Number(req.nextUrl.searchParams.get("anno"));
-
-    if (!Number.isInteger(anno) || anno < ANNO_MIN || anno > new Date().getFullYear() + 1) {
-      return NextResponse.json({ success: false, error: "Anno non valido" }, { status: 400 });
-    }
-
-    const supabase = createServiceRoleClient();
-
-    // Stessa verifica del salvataggio: da qui in poi si usa la service role
-    // key, che passa sopra a ogni permesso, quindi il condominio va dimostrato
-    // di chi sta cancellando.
-    if (!(await eAdmin(supabase, user.id, condominiumId))) {
-      return NextResponse.json({ success: false, error: "Non autorizzato" }, { status: 403 });
-    }
-
-    // Le tre tabelle che compongono un esercizio. Il documento caricato NON si
-    // cancella: resta in archivio, così l'anno si può rileggere senza doverlo
-    // ricaricare.
-    for (const tabella of ["movimenti", "incassi", "quote_unita", "spese", "bilanci"] as const) {
-      const { error } = await supabase
-        .from(tabella)
-        .delete()
-        .eq("condominium_id", condominiumId)
-        .eq("anno", anno);
-      if (error) throw error;
-    }
-
-    return NextResponse.json({ success: true, anno });
-  } catch (error) {
-    console.error("Delete bilancio error:", error);
-    return NextResponse.json({ success: false, error: "Eliminazione fallita" }, { status: 500 });
   }
 }
