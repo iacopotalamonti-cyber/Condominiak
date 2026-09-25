@@ -28,7 +28,8 @@ tutto il codice (19/09/2026); non esistono più riferimenti a CondoTwin.
 | Servizio | Dove | Stato |
 | --- | --- | --- |
 | Registrazione / login | `src/app/login/`, `src/middleware.ts` | funzionante |
-| Recupero password | `src/app/login/`, `src/app/reset/` | funzionante — richiede gli indirizzi di ritorno elencati in Supabase |
+| Recupero password | `src/app/login/`, `src/app/reset/` | funzionante, provato il 25/09/2026 |
+| Email di accesso | Supabase Auth → SMTP di Resend, testi in `supabase/email/` | da "Condominiak <noreply@condominiak.me>", in italiano (produzione). Dominio verificato su Resend (DKIM e SPF su GoDaddy). Indirizzi di ritorno: `condominiak.me`, `www.condominiak.me`, `condominiak.netlify.app` in produzione; `*--condominiak.netlify.app` sullo staging, che usa ancora l'SMTP di prova di Supabase (manda solo ai membri del team) |
 | Invito via token | `src/app/invite/[token]/`, `src/app/api/invite-resident/`, `src/app/api/accetta-invito/`, `src/lib/inviti.ts` | funzionante — token segreto (solo l'impronta nel database), 14 giorni, uso singolo, legato all'email; accettato lato server |
 | Più condomini e più unità per persona | `src/lib/appartenenza.ts`, `src/components/layout/CondominioSelector.tsx` | funzionante — tabelle `membri` e `unita_membri`, condominio attivo scelto con un cookie |
 | Wizard di onboarding condominio | `src/app/onboarding/`, `src/components/onboarding/` | funzionante |
