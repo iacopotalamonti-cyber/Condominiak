@@ -12,7 +12,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <TopBar condominium={condominium} role={role} condomini={condomini} />
         {/* pb-24: il badge "Powered by Netlify" è fisso in basso a destra e
             coprirebbe i pulsanti in fondo alla pagina. */}
-        <main className="flex-1 bg-muted/20 p-4 pb-24 sm:p-6">{children}</main>
+        <main className="flex-1 bg-muted/20 p-4 pb-24 sm:p-6 sm:pb-24">{children}</main>
       </div>
     </div>
   );

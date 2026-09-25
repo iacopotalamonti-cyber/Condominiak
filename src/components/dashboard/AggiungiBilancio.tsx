@@ -340,10 +340,9 @@ export function AggiungiBilancio({
               </label>
             )}
 
-            <div className="flex items-center justify-between border-t pt-4">
-              <Button variant="ghost" onClick={reset} disabled={lavorando}>
-                Annulla
-              </Button>
+            {/* Il pulsante principale sta a sinistra: in basso a destra lo
+                copriva il badge di Netlify, fisso sopra la pagina. */}
+            <div className="flex flex-wrap items-center gap-2 border-t pt-4">
               <Button
                 onClick={salva}
                 disabled={
@@ -352,6 +351,9 @@ export function AggiungiBilancio({
               >
                 {lavorando && <Loader2 className="animate-spin" />}
                 {annoGiaPresente ? "Sostituisci nello storico" : "Aggiungi allo storico"}
+              </Button>
+              <Button variant="ghost" onClick={reset} disabled={lavorando}>
+                Annulla
               </Button>
             </div>
           </>
