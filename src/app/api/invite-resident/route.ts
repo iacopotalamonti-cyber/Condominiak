@@ -2,16 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { eAdmin } from "@/lib/appartenenza";
-import { impronta, normalizzaEmail, nuovoToken, scadenza } from "@/lib/inviti";
+import { emailInvito, inviaEmail } from "@/lib/email";
+import { GIORNI_VALIDITA, impronta, normalizzaEmail, nuovoToken, scadenza } from "@/lib/inviti";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// Crea un invito e restituisce il link, che chi gestisce il condominio manda
-// a chi vuole: per WhatsApp, per email, a voce.
-//
-// Non lo spedisce Supabase: il suo servizio email integrato manda due
-// messaggi l'ora, e invitare un condominio fallirebbe in silenzio dal terzo
-// condomino in poi.
+// Crea un invito e lo manda per email all'invitato, da noreply@condominiak.me.
+// Il link torna comunque a chi invita: se l'email non parte, o finisce nello
+// spam, lo si può mandare a mano (WhatsApp, a voce).
 export async function POST(req: NextRequest) {
   try {
     const supabaseAuth = await createClient();
@@ -76,7 +74,30 @@ export async function POST(req: NextRequest) {
     // Il token si mostra adesso e mai più: il database ne conserva solo
     // l'impronta, quindi un link perso si sostituisce con un invito nuovo.
     const base = process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin;
-    return NextResponse.json({ success: true, link: `${base}/invite/${token}` });
+    const link = `${base}/invite/${token}`;
+
+    const { data: condominio } = await supabase
+      .from("condominiums")
+      .select("via, citta")
+      .eq("id", body.condominiumId)
+      .maybeSingle();
+    const esito = await inviaEmail(
+      emailInvito({
+        a: email,
+        condominio: [condominio?.via, condominio?.citta].filter(Boolean).join(", ") || "il tuo condominio",
+        link,
+        chiInvita: user.email ?? "L'amministratore",
+        gestore: Boolean(body.gestore),
+        giorni: GIORNI_VALIDITA,
+      })
+    );
+
+    return NextResponse.json({
+      success: true,
+      link,
+      inviata: esito.inviata,
+      motivo: esito.inviata ? null : esito.motivo,
+    });
   } catch (error) {
     console.error("Invite error:", error);
     return NextResponse.json({ success: false, error: "Invito non creato" }, { status: 500 });

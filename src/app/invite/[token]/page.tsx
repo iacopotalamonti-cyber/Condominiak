@@ -20,7 +20,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PASSWORD_MINIMA } from "@/lib/password";
 
-type Stato = "verifica" | "accesso" | "conferma-email" | "accettazione" | "errore";
+type Stato = "verifica" | "accesso" | "altro-account" | "conferma-email" | "accettazione" | "errore";
+
+const stessaEmail = (a: string | undefined, b: string) =>
+  (a ?? "").trim().toLowerCase() === b.trim().toLowerCase();
 
 export default function InvitePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params);
@@ -31,6 +34,10 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
   const [condominio, setCondominio] = useState("");
   const [errore, setErrore] = useState<string | null>(null);
   const [lavorando, setLavorando] = useState(false);
+  // Chi ha già fatto l'accesso con un altro indirizzo: capita a chi prova il
+  // link sul proprio computer, o a chi riceve l'invito su un'email diversa da
+  // quella con cui è già iscritto.
+  const [entratoCome, setEntratoCome] = useState("");
 
   const accetta = useCallback(async () => {
     setStato("accettazione");
@@ -62,10 +69,15 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
       setCondominio(json.condominio);
 
       const { data } = await createClient().auth.getUser();
-      if (data.user) {
+      if (!data.user) {
+        setStato("accesso");
+      } else if (stessaEmail(data.user.email, json.email)) {
         await accetta();
       } else {
-        setStato("accesso");
+        // Prima si provava ad accettare lo stesso: il server rifiutava, e la
+        // pagina restava su un messaggio d'errore senza via d'uscita.
+        setEntratoCome(data.user.email ?? "");
+        setStato("altro-account");
       }
     })();
   }, [token, accetta]);
@@ -105,6 +117,14 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
     await accetta();
   }
 
+  async function cambiaAccount() {
+    setLavorando(true);
+    await createClient().auth.signOut();
+    setLavorando(false);
+    setEntratoCome("");
+    setStato("accesso");
+  }
+
   if (stato === "verifica" || stato === "accettazione") {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -137,6 +157,28 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
                 <AlertDescription>{errore}</AlertDescription>
               </Alert>
             </CardContent>
+          )}
+
+          {stato === "altro-account" && (
+            <>
+              <CardHeader>
+                <CardTitle>Sei entrato con un altro account</CardTitle>
+                <CardDescription>
+                  Ora sei <strong>{entratoCome}</strong>, ma l&apos;invito è per{" "}
+                  <strong>{email}</strong>. Esci da questo account per accettarlo con
+                  l&apos;indirizzo giusto: potrai entrare con la sua password o crearne una.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-3">
+                <Button onClick={cambiaAccount} disabled={lavorando}>
+                  {lavorando && <Loader2 className="animate-spin" />}
+                  Esci e continua come {email}
+                </Button>
+                <Button variant="ghost" onClick={() => router.push("/dashboard")} disabled={lavorando}>
+                  Resta come {entratoCome}
+                </Button>
+              </CardContent>
+            </>
           )}
 
           {stato === "conferma-email" && (

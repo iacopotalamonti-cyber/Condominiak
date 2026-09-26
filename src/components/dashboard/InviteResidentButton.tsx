@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Copy, Link2, Loader2, UserPlus } from "lucide-react";
+import { Check, Copy, Loader2, MailCheck, Send, UserPlus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -22,9 +22,9 @@ interface InviteResidentButtonProps {
   currentEmail: string | null;
 }
 
-// L'invito produce un link, che chi gestisce il condominio manda come vuole:
-// WhatsApp, email, a voce. Il link vale per l'indirizzo scritto qui, una volta
-// sola, per quattordici giorni.
+// L'invito parte per email all'indirizzo scritto qui, con dentro il link. Il
+// link si vede anche qui, per mandarlo a mano se l'email non arriva. Vale per
+// quell'indirizzo, una volta sola, per quattordici giorni.
 export function InviteResidentButton({
   condominiumId,
   unitaId,
@@ -36,6 +36,8 @@ export function InviteResidentButton({
   const [gestore, setGestore] = useState(false);
   const [loading, setLoading] = useState(false);
   const [link, setLink] = useState<string | null>(null);
+  const [inviata, setInviata] = useState(false);
+  const [motivo, setMotivo] = useState<string | null>(null);
   const [copiato, setCopiato] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
 
@@ -51,6 +53,8 @@ export function InviteResidentButton({
       const json = await res.json();
       if (!json.success) throw new Error(json.error || "Invito non creato");
       setLink(json.link);
+      setInviata(json.inviata === true);
+      setMotivo(json.motivo ?? null);
     } catch (err) {
       setErrore(err instanceof Error ? err.message : "Errore");
     } finally {
@@ -68,6 +72,8 @@ export function InviteResidentButton({
     setOpen(aperto);
     if (!aperto) {
       setLink(null);
+      setInviata(false);
+      setMotivo(null);
       setCopiato(false);
       setErrore(null);
     }
@@ -83,14 +89,25 @@ export function InviteResidentButton({
         <DialogHeader>
           <DialogTitle>Invita — {etichetta}</DialogTitle>
           <DialogDescription>
-            Crea un link da mandare a chi abita qui. Vale solo per l&apos;indirizzo che scrivi,
-            una volta, per quattordici giorni.
+            Mandiamo un&apos;email con il link a chi abita qui. Vale solo per l&apos;indirizzo che
+            scrivi, una volta, per quattordici giorni.
           </DialogDescription>
         </DialogHeader>
 
         {link ? (
           <div className="flex flex-col gap-3">
-            <Label htmlFor="invite-link">Mandalo a {email}</Label>
+            {inviata ? (
+              <p className="flex items-start gap-2 rounded-md bg-success/10 px-3 py-2 text-sm text-success">
+                <MailCheck className="mt-0.5 size-4 shrink-0" />
+                Invito mandato a {email}. Se non lo trova, controlli lo spam, oppure mandagli tu
+                il link qui sotto.
+              </p>
+            ) : (
+              <p className="rounded-md bg-warning/10 px-3 py-2 text-sm text-warning">
+                L&apos;email non è partita{motivo ? ` (${motivo})` : ""}: manda tu il link a {email}.
+              </p>
+            )}
+            <Label htmlFor="invite-link">Il link dell&apos;invito</Label>
             <div className="flex gap-2">
               <Input id="invite-link" readOnly value={link} onFocus={(e) => e.target.select()} />
               <Button variant="outline" onClick={copia}>
@@ -136,8 +153,8 @@ export function InviteResidentButton({
         <DialogFooter>
           {!link && (
             <Button onClick={crea} disabled={loading || !email}>
-              {loading ? <Loader2 className="animate-spin" /> : <Link2 />}
-              Crea il link
+              {loading ? <Loader2 className="animate-spin" /> : <Send />}
+              Manda l&apos;invito
             </Button>
           )}
         </DialogFooter>
