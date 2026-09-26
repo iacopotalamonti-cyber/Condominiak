@@ -182,6 +182,23 @@ Oggi chi completa l'onboarding diventa amministratore del condominio
       scriviamo in bozza noi e li rivede un legale: vedi Fase 2. La spunta
       riduce il rischio, non lo toglie
 
+### 6. Fornitori e riparto anche dai rendiconti MULTIGEST (segnalato il 26/09/2026)
+
+Il 2021 e il 2022 di via Enriques 3 sono nel formato MULTIGEST. Il motore ne
+legge i totali per categoria (tornano al centesimo), ma **non le righe di
+spesa**: la pagina Fornitori per quegli anni resta vuota. Le righe ci sono, a
+partire da pagina 4, nella forma `186-COMUNE DI BOLOGNA - passo carraio … € 185,34`,
+raggruppate per conto (`CONTO N.1 - Generali`, …), spesso su più righe.
+
+- [ ] Il profilo MULTIGEST produce i movimenti: numero di registrazione,
+      fornitore (la parte prima del primo " - "), descrizione, importo, pagina
+      e riga di origine. La somma dei movimenti di ogni conto deve tornare al
+      totale del conto, come per i Tosiani
+- [ ] Poi gli stati di riparto per appartamento dello stesso documento, che
+      oggi il motore non legge
+- [ ] Dopo il rilascio: ricaricare dall'interfaccia 2021 e 2022 e confrontare
+      con la copia del 25/09/2026
+
 ## Per reggere centinaia di condomini (verificato il 23/09/2026)
 
 I volumi non sono il problema: un condominio produce circa 130 righe l'anno fra
