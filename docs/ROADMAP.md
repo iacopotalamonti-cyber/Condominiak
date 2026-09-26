@@ -155,12 +155,10 @@ decidono `RESIDENT_LINKS` in `src/components/layout/Sidebar.tsx` e il rinvio in
 - [ ] Ogni bottone che scrive (Aggiungi rendiconto, Elimina esercizio, carica
       documento, invita, modifica impianti) si nasconde al condòmino, e la rotta
       o azione server lo rifiuta comunque: nascondere non è proteggere
-- [ ] Il database già lo permette: le tabelle dei conti si leggono da ogni
-      membro (`condomini_membro()`), le scritture solo da chi amministra. Da
-      decidere: `quote_unita` e `unita` oggi sono leggibili da ogni membro, quindi
-      un condòmino con l'API vedrebbe le quote e i nomi degli altri. Se "solo il
-      suo appartamento" vale anche per la privacy, la lettura va ristretta alle
-      proprie unità per chi non amministra
+- [x] Il database già lo permette: le tabelle dei conti si leggono da ogni
+      membro (`condomini_membro()`), le scritture solo da chi amministra. Le
+      quote degli altri restano leggibili: sono già nei PDF che tutti hanno
+      (deciso il 26/09/2026, vedi `DECISIONI.md`)
 - [ ] Nell'invito, chiamare le due scelte "Condòmino" e "Consigliere"
 
 ### 5. Chi registra il condominio dichiara chi è (chiesto il 26/09/2026)
@@ -267,7 +265,8 @@ quel cliente per smettere di usare il suo strumento attuale, niente altro.
 - [ ] (servizio 3)
 - [ ] Privacy policy, termini di servizio, informativa ai condòmini, e verifica
       legale dell'impianto "chi vede cosa" descritto in `SERVIZI.md` — prima del
-      primo condominio che non è il nostro
+      primo condominio che non è il nostro. Bozze pronte in `docs/legale/` (26/09/2026), con le
+      domande aperte per il legale nel suo `README.md`
 - [ ] Test end-to-end (Playwright) sul percorso completo: registrazione → onboarding → dashboard
 
 **Fatto quando**: un amministratore vero ci lavora sopra per un mese senza tornare indietro.

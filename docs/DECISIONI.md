@@ -4,6 +4,23 @@ Le scelte che avevano un'alternativa reale, con il motivo e la data. Serve a non
 rimetterle in discussione ogni tre mesi e a spiegare il codice a chi arriva dopo.
 Formato: data, decisione, perché, cosa abbiamo scartato.
 
+## Prese il 26/09/2026
+
+**Il condòmino vede nell'app solo il proprio appartamento, ma il database non
+nasconde le quote degli altri.** Le quote e i nomi di tutti gli appartamenti
+stanno già nei PDF che l'amministratore manda a ogni condòmino, e che l'app
+mostra per intero nei Documenti: restringere la lettura di `quote_unita` e
+`unita` non proteggerebbe niente che il condòmino non abbia già nella sua
+email. La scelta di mostrare un appartamento solo è di prodotto (non mettere in
+fila i dati degli altri, vedi "Chi vede cosa" in `SERVIZI.md`), non di
+sicurezza. Scartato: RLS per unità sulle quote, che costa complessità in ogni
+query senza togliere un'informazione a nessuno.
+
+**Rilasci in produzione accorpati.** Ogni pubblicazione costa 15 crediti Netlify
+(32 pubblicazioni = 480 crediti al 26/09/2026, con 174 crediti rimasti). Le
+correzioni si accumulano e vanno online insieme. Vedi la regola 9 in
+`ROADMAP.md`.
+
 ## Già prese (ricostruite dal codice e dai commit)
 
 **2026 — L'inferenza AI esce diretta verso `api.anthropic.com`, con `baseURL` esplicito.**
