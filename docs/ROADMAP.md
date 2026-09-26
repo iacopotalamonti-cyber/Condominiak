@@ -139,6 +139,30 @@ produce gli stessi numeri. È la prova che manca.
 - [x] Nota di sequenza: la bacheca era inutile finché l'invito non collegava
       nessuno. Dal 25/09/2026 l'invito funziona: si può fare
 
+### 4. Due ruoli per chi abita nel condominio (chiesto il 26/09/2026)
+
+Oggi il condòmino invitato vede solo il suo appartamento e i documenti (lo
+decidono `RESIDENT_LINKS` in `src/components/layout/Sidebar.tsx` e il rinvio in
+`src/lib/supabase/middleware.ts`). Non basta: i conti del condominio sono suoi.
+
+- [ ] **Condòmino** (`resident`), tutto in sola lettura: Dashboard, Bilanci 5
+      anni senza modifica né cancellazione, Analisi spese senza caricamento di
+      documenti, Fornitori per intero, Impianti, Documenti, e Il mio
+      appartamento solo per la propria unità. Niente Impostazioni
+- [ ] **Consigliere** (`admin`, oggi "gestore" nell'invito): modifica,
+      inserisce, cancella, tutto. Non vede Formati, che resta di chi gestisce
+      Condominiak (`OPERATORI`): è già così
+- [ ] Ogni bottone che scrive (Aggiungi rendiconto, Elimina esercizio, carica
+      documento, invita, modifica impianti) si nasconde al condòmino, e la rotta
+      o azione server lo rifiuta comunque: nascondere non è proteggere
+- [ ] Il database già lo permette: le tabelle dei conti si leggono da ogni
+      membro (`condomini_membro()`), le scritture solo da chi amministra. Da
+      decidere: `quote_unita` e `unita` oggi sono leggibili da ogni membro, quindi
+      un condòmino con l'API vedrebbe le quote e i nomi degli altri. Se "solo il
+      suo appartamento" vale anche per la privacy, la lettura va ristretta alle
+      proprie unità per chi non amministra
+- [ ] Nell'invito, chiamare le due scelte "Condòmino" e "Consigliere"
+
 ## Per reggere centinaia di condomini (verificato il 23/09/2026)
 
 I volumi non sono il problema: un condominio produce circa 130 righe l'anno fra
