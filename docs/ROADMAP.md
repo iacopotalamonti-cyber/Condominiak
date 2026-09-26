@@ -190,10 +190,11 @@ spesa**: la pagina Fornitori per quegli anni resta vuota. Le righe ci sono, a
 partire da pagina 4, nella forma `186-COMUNE DI BOLOGNA - passo carraio … € 185,34`,
 raggruppate per conto (`CONTO N.1 - Generali`, …), spesso su più righe.
 
-- [ ] Il profilo MULTIGEST produce i movimenti: numero di registrazione,
-      fornitore (la parte prima del primo " - "), descrizione, importo, pagina
-      e riga di origine. La somma dei movimenti di ogni conto deve tornare al
-      totale del conto, come per i Tosiani
+- [x] Il profilo MULTIGEST produce i movimenti, con fornitore, data, pagina, e
+      la somma di ogni conto che torna al suo totale (26/09/2026: 128 righe nel
+      2022, 100 nel 2021, tutte con il fornitore tranne tre scontrini). Anche
+      Contavalli ora dà il fornitore (59 righe nel 2020, 4 senza). Regola nuova
+      `in-testa` e `righeMovimento` nelle schede, anche per quelle del modello
 - [ ] Poi gli stati di riparto per appartamento dello stesso documento, che
       oggi il motore non legge
 - [ ] Dopo il rilascio: ricaricare dall'interfaccia 2021 e 2022 e confrontare

@@ -36,6 +36,17 @@ export const CONTAVALLI: ProfiloFormato = {
   voce: { tipo: "intestazione", rientroMassimo: 5 },
   segno: -1,
   totaleGenerale: "^TOTALE\\s+(-?[\\d.]+,\\d{2})$",
+  // "· 18/06/20 - (G12) - HERA comm S.p.A. - Consumi 02/03/2020 al": data,
+  // protocollo, poi la controparte fino al trattino successivo. Senza un
+  // secondo trattino ("· 13/02/20 - (G1) - Duplicato chiavi") è solo una
+  // descrizione, e la riga resta senza fornitore.
+  fornitore: {
+    tipo: "in-testa",
+    prima: "^·?\\s*\\d{1,2}/\\d{1,2}/\\d{2,4}\\s+-\\s+\\([A-Z]+\\d+\\)\\s+-\\s+",
+    fine: "\\s+-\\s",
+    fineObbligatoria: true,
+    data: "^·?\\s*(\\d{1,2}/\\d{1,2}/\\d{2,4})",
+  },
 };
 
 // MULTIGEST. Nessuna colonna: gli importi seguono il testo dopo un "€", e ogni
@@ -51,6 +62,26 @@ export const MULTIGEST: ProfiloFormato = {
   },
   totaleGenerale: "TOTALE\\s+SPESE[^€]*€\\s*(-?[\\d.]+,\\d{2})",
   fermatiAlTotale: true,
+  // Fra l'intestazione di un conto e il suo totale, una riga per spesa:
+  // "186-COMUNE DI BOLOGNA - passo carraio 25423 anno 2022. € 185,34", a volte
+  // su più righe. Il numero di registrazione apre, l'importo chiude.
+  righeMovimento: {
+    apertura: "^\\d+-",
+    importo: "€\\s*(-?[\\d.]+,\\d{2})\\s*$",
+    ignora: "^Stabile\\b|\\bPag\\.\\s*\\d+\\s*$",
+  },
+  // Il nome finisce dove comincia il documento ("ft", "proforma", "del
+  // 03/09/2021"), una parentesi, un trattino, o subito dopo la forma
+  // societaria ("UnipolSai Assicurazioni S.p.A Globale fabbricati…").
+  // "190--imposte di bollo" è una riga in più della banca della riga prima.
+  fornitore: {
+    tipo: "in-testa",
+    prima: "^\\d+-(?!-)",
+    fine:
+      "(?<=\\b(?:s\\.?p\\.?a|s\\.?r\\.?l|s\\.?n\\.?c|s\\.?a\\.?s)\\.?)\\s|\\s+(?:ft|fatt|proforma|periodo)\\b|\\s*\\(|\\s+-\\s|\\s+del\\s+\\d|\\.\\s*$",
+    eredita: "^\\d+--",
+    data: "\\bdel\\s*(\\d{1,2}/\\d{1,2}/\\d{4})",
+  },
 };
 
 export const PROFILI: ProfiloFormato[] = [CONTAVALLI, MULTIGEST, TOSIANI];

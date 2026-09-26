@@ -64,8 +64,20 @@ Come lavora il motore:
   esempio il preventivo) che non va letto.
 - "unisciVociSpezzate": true se una voce che scavalca la pagina viene ristampata con lo stesso codice e
   il totale compare solo la seconda volta.
-- "fornitore": { "tipo": "prima-del-numero" } solo se le righe dei movimenti sono "fornitore, numero di
-  documento, data, importo".
+- Il dettaglio per fornitore è parte della lettura: se il documento elenca le singole spese, la scheda
+  DEVE dire come trovarle e chi le ha emesse.
+- "righeMovimento" (solo con voce "chiusura", dove non ci sono colonne): { "apertura": espressione su
+  come comincia una riga di spesa, "importo": espressione con UN gruppo sull'importo alla fine del testo,
+  "ignora": espressione sulle righe d'intestazione di pagina da saltare quando una spesa va a capo }.
+  Il motore unisce le righe finché non trova l'importo; le spese di un conto devono sommare al suo totale.
+- "fornitore": dove sta il nome di chi ha emesso la spesa, in ogni riga di movimento.
+  { "tipo": "prima-del-numero" } se le righe sono "fornitore, numero di documento, data, importo" in
+  frammenti separati;
+  { "tipo": "in-testa", "prima": "...", "fine": "...", "fineObbligatoria": true, "eredita": "...", "data": "..." }
+  se il nome apre il testo della riga: "prima" è ciò che lo precede (numero di registrazione, data,
+  protocollo), "fine" è dove comincia la descrizione (un trattino, "ft", "del 03/09/2021", una
+  parentesi), "fineObbligatoria" true se senza "fine" la riga è solo una descrizione, "eredita" le righe
+  che continuano il fornitore della precedente, "data" un gruppo sulla data del documento.
 - Niente quantificatori annidati come (a+)+ e niente riferimenti all'indietro: verrebbero rifiutati.
 
 La "mappatura" dice in quale categoria finisce ogni voce, per chiave: la chiave è il codice (regola

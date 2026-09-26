@@ -339,9 +339,9 @@ function movimentiDa(letto: RendicontoLetto, documento: string): ExtractedMovime
       movimenti.push({
         data: movimento.data,
         descrizione: movimento.descrizione,
-        // Vuoto quando il formato non dà al fornitore una colonna sua: la riga
-        // resta, con la sua descrizione, e finisce fra le non attribuite. È
-        // meglio di un nome ritagliato a occhio dalla descrizione.
+        // Vuoto quando la scheda non sa dove sta il nome in quella riga: la
+        // riga resta, con la sua descrizione, e finisce fra le non attribuite.
+        // È meglio di un nome ritagliato a occhio dalla descrizione.
         fornitore: movimento.fornitore,
         categoria: destinazione,
         importo: movimento.importo,

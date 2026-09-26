@@ -41,8 +41,45 @@ import {
  * il nome è tutto ciò che sta prima del numero di documento, e il numero di
  * documento è il frammento subito a sinistra della data. Nessuna coordinata
  * fissa: si trova la data, e il resto viene da sé.
+ *
+ * "in-testa": il nome apre il testo della riga, dopo un prefisso fisso, e
+ * finisce dove comincia la descrizione. "186-COMUNE DI BOLOGNA - passo
+ * carraio…" in MULTIGEST, "· 18/06/20 - (G12) - HERA comm S.p.A. - Consumi…"
+ * in Contavalli. Il gestionale scrive sempre la controparte per prima: è una
+ * posizione, non un nome indovinato dalla descrizione.
  */
-export type RegolaFornitore = { tipo: "prima-del-numero" };
+export type RegolaFornitore =
+  | { tipo: "prima-del-numero" }
+  | {
+      tipo: "in-testa";
+      /** Ciò che precede il nome (numero di registrazione, data, protocollo). */
+      prima?: string;
+      /** Dove finisce il nome: il primo punto in cui l'espressione combacia. */
+      fine: string;
+      /**
+       * Senza una fine riconosciuta la riga non nomina nessuno: "· 13/02/20 -
+       * (G1) - Duplicato chiavi" è solo una descrizione.
+       */
+      fineObbligatoria?: boolean;
+      /** Riga che continua il fornitore della precedente ("190--imposte di bollo"). */
+      eredita?: string;
+      /** Un gruppo di cattura sulla data del documento, quando è nel testo. */
+      data?: string;
+    };
+
+/**
+ * Le righe di spesa nei formati senza colonne, dove l'importo chiude il testo
+ * dopo un "€" e una riga lunga va a capo: "198-MULTIGEST … compenso gestione
+ * ordinaria dal" / "01/08/2021 al 31/07/2022. … € 1.421,06".
+ */
+export interface RegolaRigheMovimento {
+  /** Come comincia una riga di spesa ("^\\d+-"). */
+  apertura: string;
+  /** Un gruppo di cattura sull'importo, alla fine del testo. */
+  importo: string;
+  /** Righe da saltare quando una spesa scavalca la pagina (le intestazioni). */
+  ignora?: string;
+}
 
 export type RegolaVoce =
   | { tipo: "codice"; schema: string }
@@ -71,6 +108,8 @@ export interface ProfiloFormato {
   voce: RegolaVoce;
   /** Come si isola il fornitore in una riga di movimento, dove è isolabile. */
   fornitore?: RegolaFornitore;
+  /** Le righe di spesa di un formato a chiusura, che non ha colonne. */
+  righeMovimento?: RegolaRigheMovimento;
   /**
    * -1 quando il formato stampa le spese come uscite di cassa, col segno meno.
    * Serve perché i totali di formati diversi siano confrontabili fra loro
@@ -162,6 +201,32 @@ function dataDi(testo: string): string {
   return `${completo}-${mese.padStart(2, "0")}-${giorno.padStart(2, "0")}`;
 }
 
+// Oltre questa lunghezza un "nome" è una descrizione che la regola non ha
+// saputo tagliare: meglio una riga senza fornitore che un fornitore finto.
+const MAX_NOME_FORNITORE = 60;
+
+/** Il fornitore e la data scritti in testa al testo di una riga, se ci sono. */
+export function inTesta(
+  testo: string,
+  regola: Extract<RegolaFornitore, { tipo: "in-testa" }>,
+  precedente: string
+): { fornitore: string; data: string } {
+  const data = regola.data ? dataDi(testo.match(new RegExp(regola.data, "i"))?.[1] ?? "") : "";
+  if (regola.eredita && new RegExp(regola.eredita, "i").test(testo)) return { fornitore: precedente, data };
+
+  let resto = testo.trim();
+  if (regola.prima) {
+    const prefisso = resto.match(new RegExp(regola.prima, "i"));
+    if (!prefisso || prefisso.index !== 0) return { fornitore: "", data };
+    resto = resto.slice(prefisso[0].length);
+  }
+  const fine = resto.match(new RegExp(regola.fine, "i"));
+  if (!fine && regola.fineObbligatoria) return { fornitore: "", data };
+  const nome = (fine ? resto.slice(0, fine.index) : resto).replace(/[\s.,;:-]+$/, "").trim();
+  const buono = nome.length >= 2 && nome.length <= MAX_NOME_FORNITORE && !FORNITORE_GENERICO.test(nome);
+  return { fornitore: buono ? nome : "", data };
+}
+
 /** La colonna più a sinistra: l'importo del singolo movimento. */
 const COLONNA_MOVIMENTO = 0;
 
@@ -216,6 +281,17 @@ export function leggi(pagine: Pagina[], profilo: ProfiloFormato): Lettura {
   const schemaPersonali = profilo.personali ? new RegExp(profilo.personali) : null;
 
   const nomi = new Map<string, string>();
+  const righe = profilo.righeMovimento
+    ? {
+        apertura: new RegExp(profilo.righeMovimento.apertura, "i"),
+        importo: new RegExp(profilo.righeMovimento.importo, "i"),
+        ignora: profilo.righeMovimento.ignora ? new RegExp(profilo.righeMovimento.ignora, "i") : null,
+      }
+    : null;
+  // Nei formati a chiusura le righe di un conto arrivano prima del suo totale:
+  // si tengono da parte finché il totale non dice a quale voce appartengono.
+  let raccolti: MovimentoLetto[] = [];
+  let inCorso: { testo: string; pagina: number } | null = null;
   const parole = profilo.intestazioni
     ? { movimento: new RegExp(profilo.intestazioni.movimento, "i"), totali: new RegExp(profilo.intestazioni.totali, "i") }
     : INTESTAZIONI_PREDEFINITE;
@@ -330,10 +406,52 @@ export function leggi(pagine: Pagina[], profilo: ProfiloFormato): Lettura {
               importo,
               importoSecondario: null,
               pagina: pagina.numero,
-              // Questo formato dichiara solo il totale del conto: le righe che
-              // lo compongono stanno altrove, e non le leggiamo.
-              movimenti: [],
+              // Le righe lette fra l'intestazione del conto e il suo totale.
+              // Se non sommano al totale vengono scartate più sotto, come per
+              // i formati a colonne.
+              movimenti: raccolti,
             });
+          }
+          raccolti = [];
+          inCorso = null;
+          continue;
+        }
+        if (schemaNomi?.test(linea)) {
+          // Un conto nuovo: una riga rimasta a metà nel precedente non gli
+          // appartiene.
+          raccolti = [];
+          inCorso = null;
+          continue;
+        }
+        if (righe) {
+          if (righe.apertura.test(linea)) {
+            inCorso = { testo: linea, pagina: pagina.numero };
+          } else if (inCorso && !righe.ignora?.test(linea)) {
+            inCorso.testo = `${inCorso.testo} ${linea}`;
+          }
+          const chiusa = inCorso?.testo.match(righe.importo);
+          if (inCorso && chiusa) {
+            const valore = importoDi(chiusa[1]);
+            if (valore !== null) {
+              const descrizione = inCorso.testo
+                .slice(0, chiusa.index)
+                .replace(righe.apertura, "")
+                .replace(/[\s.]+$/, "")
+                .trim();
+              const regola = profilo.fornitore;
+              const letto =
+                regola?.tipo === "in-testa"
+                  ? inTesta(inCorso.testo.slice(0, chiusa.index), regola, raccolti.at(-1)?.fornitore ?? "")
+                  : { fornitore: "", data: "" };
+              raccolti.push({
+                descrizione,
+                fornitore: letto.fornitore,
+                data: letto.data,
+                importo: valore,
+                pagina: inCorso.pagina,
+              });
+            }
+            inCorso = null;
           }
         }
         continue;
@@ -373,17 +491,28 @@ export function leggi(pagine: Pagina[], profilo: ProfiloFormato): Lettura {
             .join(" ")
             .trim();
 
+          const descrizione = sinistra
+            .map((f) => f.testo.trim())
+            .filter(Boolean)
+            .join(" ")
+            .trim();
+          const regola = profilo.fornitore;
+          const letto =
+            regola?.tipo === "in-testa"
+              ? inTesta(descrizione, regola, corrente.movimenti.at(-1)?.fornitore ?? "")
+              : null;
+
           corrente.movimenti.push({
-            descrizione: sinistra
-              .map((f) => f.testo.trim())
-              .filter(Boolean)
-              .join(" ")
-              .trim(),
+            descrizione,
             // Il fornitore si stacca solo se prima del numero di documento
             // resta qualcosa: altrimenti si taglierebbe via il nome invece del
             // numero.
-            fornitore: profilo.fornitore && !FORNITORE_GENERICO.test(nome) ? nome : "",
-            data: testoData ? dataDi(testoData.match(DATA_IN_CODA)![1]) : "",
+            fornitore: letto
+              ? letto.fornitore
+              : regola && !FORNITORE_GENERICO.test(nome)
+                ? nome
+                : "",
+            data: testoData ? dataDi(testoData.match(DATA_IN_CODA)![1]) : (letto?.data ?? ""),
             importo: valore,
             pagina: pagina.numero,
           });

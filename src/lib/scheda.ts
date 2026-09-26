@@ -19,7 +19,7 @@
 
 import { CATEGORIE_SPESA_LABEL } from "./calcoli.ts";
 import { leggiRendiconto, type SchedaApprovata } from "./lettura.ts";
-import { riconosci, type ProfiloFormato, type RegolaVoce } from "./motore.ts";
+import { riconosci, type ProfiloFormato, type RegolaFornitore, type RegolaVoce } from "./motore.ts";
 import { RIMBORSO, type Destinazione, type Profilo } from "./profilo.ts";
 import type { Pagina } from "./rendiconto.ts";
 
@@ -124,6 +124,39 @@ function voce(valore: unknown, errori: string[]): RegolaVoce | undefined {
   return undefined;
 }
 
+function fornitore(valore: unknown, errori: string[]): RegolaFornitore | undefined {
+  if (!eOggetto(valore)) {
+    errori.push("scheda.fornitore: deve essere un oggetto");
+    return undefined;
+  }
+  if (valore.tipo === "prima-del-numero") {
+    controllaChiavi(valore, ["tipo"], "scheda.fornitore", errori);
+    return { tipo: "prima-del-numero" };
+  }
+  if (valore.tipo === "in-testa") {
+    controllaChiavi(valore, ["tipo", "prima", "fine", "fineObbligatoria", "eredita", "data"], "scheda.fornitore", errori);
+    const fine = espressione(valore.fine, "scheda.fornitore.fine", errori);
+    if (!fine) return undefined;
+    const regola: RegolaFornitore = { tipo: "in-testa", fine };
+    for (const campo of ["prima", "eredita"] as const) {
+      if (valore[campo] === undefined) continue;
+      const e = espressione(valore[campo], `scheda.fornitore.${campo}`, errori);
+      if (e) regola[campo] = e;
+    }
+    if (valore.data !== undefined) {
+      const e = espressione(valore.data, "scheda.fornitore.data", errori, 1);
+      if (e) regola.data = e;
+    }
+    if (valore.fineObbligatoria !== undefined) {
+      if (typeof valore.fineObbligatoria === "boolean") regola.fineObbligatoria = valore.fineObbligatoria;
+      else errori.push("scheda.fornitore.fineObbligatoria: vero o falso");
+    }
+    return regola;
+  }
+  errori.push(`scheda.fornitore.tipo: "${String(valore.tipo)}" non è prima-del-numero o in-testa`);
+  return undefined;
+}
+
 function mappa(valore: unknown, dove: string, errori: string[]): Record<string, Destinazione> {
   const out: Record<string, Destinazione> = {};
   if (valore === undefined) return out;
@@ -171,6 +204,7 @@ export function validaProposta(
       "intestazioni",
       "voce",
       "fornitore",
+      "righeMovimento",
       "segno",
       "totaleGenerale",
       "personali",
@@ -219,10 +253,23 @@ export function validaProposta(
   }
 
   if (s.fornitore !== undefined) {
-    if (eOggetto(s.fornitore) && s.fornitore.tipo === "prima-del-numero" && Object.keys(s.fornitore).length === 1) {
-      scheda.fornitore = { tipo: "prima-del-numero" };
+    const regola = fornitore(s.fornitore, errori);
+    if (regola) scheda.fornitore = regola;
+  }
+  if (s.righeMovimento !== undefined) {
+    if (!eOggetto(s.righeMovimento)) {
+      errori.push("scheda.righeMovimento: deve essere un oggetto");
     } else {
-      errori.push('scheda.fornitore: l\'unica regola è { "tipo": "prima-del-numero" }');
+      const r = s.righeMovimento;
+      controllaChiavi(r, ["apertura", "importo", "ignora"], "scheda.righeMovimento", errori);
+      const apertura = espressione(r.apertura, "scheda.righeMovimento.apertura", errori);
+      const importo = espressione(r.importo, "scheda.righeMovimento.importo", errori, 1);
+      const ignora =
+        r.ignora === undefined ? undefined : espressione(r.ignora, "scheda.righeMovimento.ignora", errori);
+      if (apertura && importo) scheda.righeMovimento = ignora ? { apertura, importo, ignora } : { apertura, importo };
+    }
+    if (scheda.voce.tipo !== "chiusura") {
+      errori.push("scheda.righeMovimento: serve solo ai formati a chiusura, che non hanno colonne");
     }
   }
   if (s.segno !== undefined) {

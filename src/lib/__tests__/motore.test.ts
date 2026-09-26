@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 
-import { leggi, riconosci, type ProfiloFormato } from "../motore.ts";
+import { inTesta, leggi, riconosci, type ProfiloFormato } from "../motore.ts";
 import { CONTAVALLI, MULTIGEST, PROFILI, TOSIANI } from "../profili.ts";
 import type { Frammento, Pagina } from "../rendiconto.ts";
 
@@ -264,4 +264,97 @@ test("\"Fornitori vari\" non è un fornitore", () => {
   assert.equal(movimento.fornitore, "");
   assert.equal(movimento.data, "2025-09-30");
   assert.equal(movimento.importo, -2422.38);
+});
+
+// ---------------------------------------------------------------------------
+// Le righe di spesa dei formati senza colonne, e il fornitore in testa
+// ---------------------------------------------------------------------------
+
+// Righe vere del rendiconto MULTIGEST 2021-2022 di via Enriques 3.
+function paginaMultigest(numero: number, righe: string[]): Pagina {
+  return { numero, righe: righe.map((s, i) => riga(700 - i * 10, [testo(19, s)])) };
+}
+
+test("MULTIGEST: ogni riga di spesa del conto, anche quelle che vanno a capo", () => {
+  const pagine = [
+    paginaMultigest(4, [
+      "CONTO N.1 - Generali",
+      "186-COMUNE DI BOLOGNA - passo carraio 25423 anno 2022. € 185,34",
+      "189-BPER BANCA. € 0,00",
+      "190--imposte di bollo al 31/07/2022. € 100,00",
+      "188-UnipolSai Assicurazioni S.p.A Globale fabbricati n°173508742 dal 31/03/2022 al 31/03/2023. € 2.691,82",
+      "198-MULTIGEST di Geom. Nicola Schina proforma n. 185 del 16/11/2022 - compenso gestione ordinaria dal",
+      "01/08/2021 al 31/07/2022. Compresi oneri fiscali e previdenziali. € 1.421,06",
+    ]),
+    // Una spesa che scavalca la pagina: l'intestazione non entra nella descrizione.
+    paginaMultigest(5, [
+      "203-Studio Legale Avvocati Associati Minelli - Vancini ft 32 del 21/02/2022 - Acconto compenso per attività di",
+      "Stabile ENRIQUES 3",
+      "Bologna (BO) - C.F. 91424680378 - (74) Pag. 2",
+      "consulenza. € 804,16",
+      "Tot. Conto n.1 € 5.202,38",
+      "TOTALE SPESE al 31/07/2022 € 5.202,38",
+    ]),
+  ];
+
+  const [voce] = leggi(pagine, MULTIGEST).voci;
+  assert.equal(voce.importo, 5202.38);
+  assert.deepEqual(
+    voce.movimenti.map((m) => [m.fornitore, m.importo]),
+    [
+      ["COMUNE DI BOLOGNA", 185.34],
+      ["BPER BANCA", 0],
+      ["BPER BANCA", 100],
+      ["UnipolSai Assicurazioni S.p.A", 2691.82],
+      ["MULTIGEST di Geom. Nicola Schina", 1421.06],
+      ["Studio Legale Avvocati Associati Minelli", 804.16],
+    ]
+  );
+  const legale = voce.movimenti[5];
+  assert.equal(legale.pagina, 5);
+  assert.equal(legale.data, "2022-02-21");
+  assert.ok(!legale.descrizione.includes("Stabile"));
+  assert.ok(legale.descrizione.endsWith("consulenza"));
+});
+
+test("MULTIGEST: righe che non sommano al totale del conto non restano", () => {
+  const pagine = [
+    paginaMultigest(4, [
+      "CONTO N.9 - IMPIANTO FOTOVOLTAICO",
+      "222-ACCISE F24 del 10/12/2021 - pagamento diritto di licenza anno 2021. € 23,24",
+      "Tot. Conto n.9 € 30,00",
+    ]),
+  ];
+
+  const [voce] = leggi(pagine, MULTIGEST).voci;
+  assert.equal(voce.importo, 30);
+  assert.deepEqual(voce.movimenti, []);
+});
+
+test("Contavalli: il fornitore è fra protocollo e trattino, e senza trattino non c'è", () => {
+  const pagina: Pagina = {
+    numero: 8,
+    righe: [
+      riga(700, COLONNE_CONTAVALLI),
+      riga(650, [testo(31, "Manutenzioni")]),
+      riga(640, [testo(59, "· 18/06/20 - (G12) - HERA comm S.p.A. - Consumi 02/03/2020 al"), importo(304, "-839,93")]),
+      riga(630, [testo(59, "· 13/02/20 - (G1) - Duplicato chiavi"), importo(304, "-14,60"), importo(409, "-854,53")]),
+    ],
+  };
+
+  const [voce] = leggi([pagina], CONTAVALLI).voci;
+  assert.deepEqual(
+    voce.movimenti.map((m) => [m.fornitore, m.data, m.importo]),
+    [
+      ["HERA comm S.p.A", "2020-06-18", 839.93],
+      ["", "2020-02-13", 14.6],
+    ]
+  );
+});
+
+test("in testa: una descrizione troppo lunga non diventa un fornitore", () => {
+  const regola = { tipo: "in-testa" as const, prima: "^\\d+-", fine: "\\s*\\(" };
+  const lungo = "208-Storno per errato rimborso acquisto zerbino ad uso condominiale acquistato da propr. (31 - X)";
+  assert.equal(inTesta(lungo, regola, "").fornitore, "");
+  assert.equal(inTesta("47-AXPO (pod IT001E43184966) (7,5%) - energia", regola, "").fornitore, "AXPO");
 });
