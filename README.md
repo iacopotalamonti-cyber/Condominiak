@@ -114,7 +114,6 @@ un rilascio:
 ```bash
 EXTRACTION_MODEL=claude-sonnet-5   # default: claude-opus-5
 EXTRACTION_EFFORT=medium           # low | medium | high | xhigh | max
-ANTHROPIC_BASE_URL=                # per tornare al gateway, se serve
 ```
 
 Provare un modello più economico è un esperimento misurabile e non una

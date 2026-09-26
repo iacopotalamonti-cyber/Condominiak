@@ -10,7 +10,8 @@ Formato: data, decisione, perché, cosa abbiamo scartato.
 Dentro una Netlify Function l'AI Gateway si inserisce da solo negli SDK supportati e
 fattura l'inferenza sui crediti del piano, gli stessi che pagano l'hosting: è già
 costato un sito offline (6,15 $ = 1.106 crediti su 1.000). Scartato: lasciare il
-gateway per comodità. Reversibile con `ANTHROPIC_BASE_URL`.
+gateway per comodità, e anche una variabile per tornarci: `ANTHROPIC_BASE_URL` è
+proprio quella che il gateway imposta da sé. Le chiamate AI vanno solo ad Anthropic.
 
 **2026 — Ogni importo estratto porta con sé la sua provenienza (documento, pagina, riga).**
 Un numero estratto da un'AI senza modo di risalire alla fonte non è verificabile,
