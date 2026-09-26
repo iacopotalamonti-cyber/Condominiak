@@ -267,3 +267,10 @@ quel cliente per smettere di usare il suo strumento attuale, niente altro.
    Supabase non lo fa più da solo, e una tabella senza permessi è invisibile
    all'app. Mai `alter default privileges`: una tabella nuova senza RLS
    diventerebbe leggibile da chiunque abbia fatto l'accesso.
+9. **I rilasci in produzione si accorpano.** Ogni pubblicazione su Netlify costa
+   crediti del piano, e i crediti finiti spengono il sito (il 26/09/2026 ne
+   restavano 174 su 1.000). Le correzioni si accumulano sul ramo di lavoro, si
+   provano in locale, e vanno in produzione insieme, quando chi gestisce il
+   progetto lo chiede o quando c'è un blocco vero per gli utenti. Niente PR
+   aperte per ogni piccola modifica: anche l'anteprima di una PR è una
+   pubblicazione.
