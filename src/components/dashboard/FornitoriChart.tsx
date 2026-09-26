@@ -1,5 +1,6 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { formatEuro } from "@/lib/calcoli";
@@ -20,7 +21,28 @@ const MAX_BARRE = 12;
 const ALTRI = "Altri fornitori";
 const TRATTEGGIO_ID = "fornitori-non-attribuito";
 
+// Nomi come "S.G Service SNC di Sturba Leonardo e Gabrielli Paolo" uscivano
+// dalla colonna delle etichette e finivano sopra le barre. Il nome intero
+// resta nel riquadro che appare passando sopra la barra.
+const taglia = (nome: string, max: number) =>
+  nome.length > max ? `${nome.slice(0, max - 1).trimEnd()}…` : nome;
+
+// Su un telefono la colonna delle etichette si prendeva metà del grafico.
+const STRETTO = "(max-width: 640px)";
+function useStretto(): boolean {
+  return useSyncExternalStore(
+    (avvisa) => {
+      const media = window.matchMedia(STRETTO);
+      media.addEventListener("change", avvisa);
+      return () => media.removeEventListener("change", avvisa);
+    },
+    () => window.matchMedia(STRETTO).matches,
+    () => false
+  );
+}
+
 export function FornitoriChart({ voci }: FornitoriChartProps) {
+  const stretto = useStretto();
   const ordinati = [...voci].sort((a, b) => b.totale - a.totale);
   const principali = ordinati.slice(0, MAX_BARRE);
   const coda = ordinati.slice(MAX_BARRE);
@@ -42,7 +64,7 @@ export function FornitoriChart({ voci }: FornitoriChartProps) {
       <BarChart
         data={data}
         layout="vertical"
-        margin={{ top: 4, right: 24, left: 8, bottom: 4 }}
+        margin={{ top: 4, right: stretto ? 8 : 24, left: stretto ? 0 : 8, bottom: 4 }}
         barCategoryGap={10}
       >
         <defs>
@@ -70,8 +92,15 @@ export function FornitoriChart({ voci }: FornitoriChartProps) {
           dataKey="fornitore"
           tickLine={false}
           axisLine={false}
-          width={170}
-          tick={{ fill: "var(--foreground)", fontSize: 12 }}
+          width={stretto ? 104 : 170}
+          interval={0}
+          // Disegnata a mano, su una riga: l'etichetta di recharts va a capo e
+          // su due righe si sovrappone alla barra vicina.
+          tick={({ x, y, payload }) => (
+            <text x={x} y={y} dy={4} textAnchor="end" fill="var(--foreground)" fontSize={12}>
+              {taglia(String(payload?.value ?? ""), stretto ? 15 : 26)}
+            </text>
+          )}
         />
         <Tooltip
           cursor={{ fill: "var(--chart-grid)", opacity: 0.4 }}
