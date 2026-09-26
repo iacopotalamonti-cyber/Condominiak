@@ -44,6 +44,9 @@ import { validaProposta } from "../../src/lib/scheda";
 import { condominiDi } from "../../src/lib/appartenenza";
 import { BUCKET, eUuid, puoEstrarre } from "../../src/lib/percorsi";
 
+// Le chiamate al modello vanno solo qui (vedi docs/DECISIONI.md).
+const ANTHROPIC_URL = "https://api.anthropic.com";
+
 // Un rendiconto per esercizio, qualche anno alla volta: oltre è un errore o
 // un abuso, e ogni file è una o più chiamate al modello.
 const MAX_FILE = 12;
@@ -606,13 +609,13 @@ export default async (req: Request) => {
     // le funzioni e fattura l'inferenza sui crediti del piano — lo stesso monte
     // che paga l'hosting. È già successo: 6,15 $ di inferenza sono costati
     // 1.106 crediti e hanno messo offline il sito. Un baseURL esplicito ha la
-    // precedenza sulla configurazione iniettata, quindi le chiamate tornano su
-    // Anthropic, dove la spesa è visibile e non può spegnere il condominio.
-    // Resta sovrascrivibile da variabile d'ambiente, per tornare indietro senza
-    // un rilascio.
+    // precedenza sulla configurazione iniettata, quindi le chiamate vanno solo
+    // ad Anthropic, dove la spesa è visibile e non può spegnere il condominio.
+    // Non si legge da nessuna variabile: ANTHROPIC_BASE_URL è proprio quella
+    // che il gateway imposta da sé, e leggerla lo farebbe rientrare.
     const anthropic = new Anthropic({
       apiKey: anthropicApiKey,
-      baseURL: Netlify.env.get("ANTHROPIC_BASE_URL") ?? "https://api.anthropic.com",
+      baseURL: ANTHROPIC_URL,
       timeout: 4 * 60_000,
       maxRetries: 2,
     });
