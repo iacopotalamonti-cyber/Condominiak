@@ -163,6 +163,27 @@ decidono `RESIDENT_LINKS` in `src/components/layout/Sidebar.tsx` e il rinvio in
       proprie unità per chi non amministra
 - [ ] Nell'invito, chiamare le due scelte "Condòmino" e "Consigliere"
 
+### 5. Chi registra il condominio dichiara chi è (chiesto il 26/09/2026)
+
+Oggi chi completa l'onboarding diventa amministratore del condominio
+(`save-condominium`, `ruolo: "admin"`) senza dire chi è e senza accettare niente.
+
+- [ ] Nell'onboarding, prima del caricamento: "Chi sei in questo condominio?"
+      Consigliere, amministratore, oppure condòmino
+- [ ] Per tutti: accettazione di termini di servizio e informativa privacy
+- [ ] Chi non è consigliere né amministratore spunta in più una dichiarazione:
+      è condòmino di quell'edificio, ha ricevuto i documenti come tutti gli
+      altri, li carica solo per consultarli con i condòmini dello stesso
+      condominio, e risponde di quello che carica
+- [ ] Ogni accettazione resta scritta, con utente, condominio, ruolo dichiarato,
+      testo esatto (o sua versione) e data: è la prova, se un giorno serve.
+      Tabella nuova, leggibile solo da chi l'ha firmata e dagli operatori
+- [ ] Da decidere: che poteri ha chi registra senza essere consigliere, e come
+      un consigliere vero può subentrargli
+- [ ] I testi (termini, privacy, dichiarazione, informativa ai condòmini) li
+      scriviamo in bozza noi e li rivede un legale: vedi Fase 2. La spunta
+      riduce il rischio, non lo toglie
+
 ## Per reggere centinaia di condomini (verificato il 23/09/2026)
 
 I volumi non sono il problema: un condominio produce circa 130 righe l'anno fra
